@@ -76,7 +76,7 @@ Setting `capture_result=True` makes the compute real. The connector passes each 
 pod as an upper-cased env var (input `numbers` becomes `$NUMBERS`), the workload computes a value
 and prints a line `ARMADA_RESULT:<value>`, and on success the connector reads that line back from
 the pod's logs (via binoculars) and returns it as the node's output. If no such line is found it
-falls back to the template. `examples/real_pipeline.py` uses this to run a distributed sum across
+falls back to the template. `examples/pipeline.py` uses this to run a distributed sum across
 a gang of workers. The remaining gap to full generality is running an arbitrary Python function
 (rather than a shell workload) and moving large inputs and outputs through a blob store.
 

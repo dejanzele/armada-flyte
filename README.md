@@ -8,10 +8,10 @@ submitted to an Armada queue, scheduled by Armada, and polled to completion.
 
 ### 1. Install
 
-This is a private repo, so install it as a git dependency (with your SSH key or a token):
+Install it straight from the repository:
 
 ```bash
-pip install "armada-flyte @ git+ssh://git@github.com/<org>/armada-flyte.git"
+pip install "armada-flyte @ git+https://github.com/armadaproject/armada-flyte.git"
 ```
 
 On Apple Silicon, use an arm64 Python. An x86_64 interpreter cannot load Flyte's native
@@ -76,7 +76,7 @@ Each node submits a real Armada job and is genuinely scheduled, run as a pod, an
 - real Armada scheduling, including gang jobs,
 - real per-node compute, when you opt in: with `capture_result=True` the pod does actual work
   (its inputs arrive as env vars), prints `ARMADA_RESULT:<value>`, and the connector reads that
-  back from the pod's logs. See `examples/real_pipeline.py` (a distributed sum across a gang).
+  back from the pod's logs. See `examples/pipeline.py` (a distributed sum across a gang).
 
 By default a node's output is synthesised from `output_template` rather than the workload, which
 keeps the basic examples simple. What is not here yet is running an arbitrary Python function as

@@ -18,7 +18,7 @@ The result is produced by the pods, not synthesised, so the printed total is rea
 
 Run (Armada cluster up at $ARMADA_URL, default localhost:50051):
 
-    ./.venv/bin/python examples/real_pipeline.py
+    ./.venv/bin/python examples/pipeline.py
 """
 
 from __future__ import annotations
