@@ -16,11 +16,11 @@ What is real here: the DAG topology, the data threaded between nodes (generate's
 to every worker, and the workers' outputs are fed to aggregate), and Armada gang scheduling.
 The three worker jobs share an Armada gangId and are scheduled all-or-nothing together.
 
-What is M1 (placeholder): each node runs a real Armada job, but the workload is a stand-in
+What is a placeholder here: each node runs a real Armada job, but the workload is a stand-in
 (echo). The node's output is synthesised by the connector from its output_template and inputs,
-not computed inside the pod. Running real Python in the pod is the next milestone.
+not computed inside the pod. For real in-pod compute, see pipeline.py.
 
-Run (Armada localdev stack up at $ARMADA_URL, default localhost:50051, with lookoutingester):
+Run (Armada cluster reachable at $ARMADA_URL, default localhost:50051):
 
     ./.venv/bin/python examples/gang_pipeline.py
 """

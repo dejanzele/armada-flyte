@@ -80,12 +80,18 @@ falls back to the template. `examples/pipeline.py` uses this to run a distribute
 a gang of workers. The remaining gap to full generality is running an arbitrary Python function
 (rather than a shell workload) and moving large inputs and outputs through a blob store.
 
-## Roadmap
+## Limitations and next steps
 
-- **M1 (this repo).** Real Armada submission, status polling, gang scheduling, and DAG dataflow,
-  with placeholder per-node compute and synthesised outputs. Runs through Flyte local execution.
-- **M2.** Run the user's actual Python in the Armada pod. This means shipping the task's code
-  bundle and threading inputs and outputs through a shared blob store (S3, GCS, or MinIO) using
-  Flyte's `a0` entrypoint, then having the connector wrap that container into the Armada pod spec.
-- **M4.** Deploy the connector as a Flyte `ConnectorEnvironment` so a real Flyte backend
-  (FlytePropeller) routes `armada` tasks to it, instead of only local execution.
+What works today: real Armada submission, status polling, gang scheduling, DAG dataflow, and
+real in-pod compute for shell workloads (via `capture_result`). It runs through Flyte local
+execution.
+
+Two things are not supported yet:
+
+- **Arbitrary Python tasks.** Running a normal Python function as the body of a node would mean
+  shipping the task's code bundle and threading inputs and outputs through a shared blob store
+  (S3, GCS, or MinIO) using Flyte's `a0` entrypoint, then having the connector wrap that
+  container into the Armada pod spec. Today a node runs a shell workload, not your function.
+- **A deployed Flyte backend.** The connector only runs under Flyte local execution. Packaging it
+  as a Flyte `ConnectorEnvironment`, so a deployed Flyte backend (FlytePropeller) routes `armada`
+  tasks to it, is not done yet.

@@ -9,10 +9,11 @@ The connector implements the three-method Flyte v2 connector contract:
 In local execution, ``flyte.connectors.AsyncConnectorExecutorMixin`` drives this loop
 in-process: it calls ``create`` once, then polls ``get`` every 3s until a terminal phase.
 
-This is the milestone-1 (M1) shape: each DAG node runs a *real* Armada job (a placeholder
-workload, e.g. ``echo``), and the node's output is synthesised by the connector from the
-task's ``output_template`` + inputs. Running the user's actual Python inside the Armada pod
-(reading inputs / writing outputs via a shared blob store) is M2 and intentionally out of scope.
+Each DAG node runs a real Armada job. By default the workload is a placeholder (e.g. ``echo``)
+and the node's output is synthesised from the task's ``output_template`` and inputs. With
+``capture_result=True`` the pod does real work and the connector reads its result from the pod
+logs. Running an arbitrary Python function inside the pod (shipping code and moving inputs and
+outputs through a blob store) is not supported yet.
 """
 
 from __future__ import annotations

@@ -1,9 +1,9 @@
 # Examples
 
 Runnable Flyte 2 examples that schedule each task onto Armada via the `armada_flyte`
-connector. Every DAG node is a *real* Armada job: the connector submits it, polls it to
-completion, and synthesises the node's output from `ArmadaConfig.output_template` + inputs
-(milestone M1).
+connector. Every DAG node is a real Armada job: the connector submits it and polls it to
+completion. By default the node's output is synthesised from `ArmadaConfig.output_template` and
+inputs; `pipeline.py` shows real in-pod compute via `capture_result`.
 
 ## Prerequisites
 

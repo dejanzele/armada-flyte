@@ -14,8 +14,8 @@ Install it straight from the repository:
 pip install "armada-flyte @ git+https://github.com/armadaproject/armada-flyte.git"
 ```
 
-On Apple Silicon, use an arm64 Python. An x86_64 interpreter cannot load Flyte's native
-`obstore` wheel (see [docs/gotchas.md](docs/gotchas.md)).
+> On Apple Silicon, use an arm64 Python.
+> An x86_64 interpreter cannot load Flyte's native `obstore` wheel (see [docs/gotchas.md](docs/gotchas.md)).
 
 ### 2. Point it at an Armada
 
@@ -31,8 +31,10 @@ Full walkthrough in [docs/getting-started.md](docs/getting-started.md).
 
 ### 3. Write a workflow
 
-Two rules: import `armada_flyte` before `armada_client`, and keep the connector tasks (which
-have `image=None`) in their own `TaskEnvironment`, with the driver environment depending on it.
+Two rules:
+
+- Import `armada_flyte` before `armada_client`. This registers the connector and applies the proto shim.
+- Keep the connector tasks (which have `image=None`) in their own `TaskEnvironment`, and have the driver environment `depends_on` it.
 
 ```python
 import flyte
@@ -58,10 +60,13 @@ if __name__ == "__main__":
     print(run.outputs()[0])
 ```
 
-`ArmadaConfig` controls each job: `queue`, `image`, `command`, `cpu`, `memory`, `priority`, an
-`output_template`, and gang scheduling via `gang_id` / `gang_cardinality`. Call the same
-`ArmadaTask` several times in a DAG to fan out; give the workers a shared `gang_id` to schedule
-them as an Armada gang. The [examples](examples/) cover linear, fan-out, and gang pipelines.
+`ArmadaConfig` controls each job: `queue`, `image`, `command`, `cpu`, `memory`, `priority`, and an
+`output_template`.
+
+To fan out, call the same `ArmadaTask` several times in a DAG. To schedule those calls as one
+Armada gang, give them a shared `gang_id` and `gang_cardinality`.
+
+The [examples](examples/) cover linear, fan-out, and gang pipelines.
 
 ### 4. Run it
 
@@ -78,15 +83,17 @@ Each node submits a real Armada job and is genuinely scheduled, run as a pod, an
   (its inputs arrive as env vars), prints `ARMADA_RESULT:<value>`, and the connector reads that
   back from the pod's logs. See `examples/pipeline.py` (a distributed sum across a gang).
 
-By default a node's output is synthesised from `output_template` rather than the workload, which
-keeps the basic examples simple. What is not here yet is running an arbitrary Python function as
-the body of a node (shipping code and large inputs/outputs through a blob store); that is the next
-milestone, described in [docs/architecture.md](docs/architecture.md#roadmap).
+By default a node's output is synthesised from `output_template` rather than the workload. This
+keeps the basic examples simple.
+
+One thing is not supported yet: running an arbitrary Python function as the body of a node, which
+would mean shipping the task's code and moving large inputs and outputs through a blob store. See
+the [limitations and next steps](docs/architecture.md#limitations-and-next-steps).
 
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) how the connector works, the state mapping, gang
-  scheduling, and the M1/M2/M4 roadmap.
+  scheduling, and the current limits.
 - [docs/getting-started.md](docs/getting-started.md) stand up a local Armada and run an example.
 - [docs/gotchas.md](docs/gotchas.md) the non-obvious environment and proto issues.
 
