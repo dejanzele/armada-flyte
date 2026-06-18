@@ -20,6 +20,9 @@ Armada gRPC call:
 In local execution Flyte's `AsyncConnectorExecutorMixin` drives the loop in-process: it calls
 `create` once, then polls `get` every 3 seconds until the task reaches a terminal phase.
 
+`ArmadaConfig` also exposes Armada gang scheduling (`gang_id`, `gang_cardinality`): tasks sharing
+a gang are scheduled all-or-nothing together. See `examples/gang_pipeline.py`.
+
 ```mermaid
 flowchart TD
     dag["Flyte 2 DAG (ArmadaTask nodes)"]
@@ -77,7 +80,7 @@ src/armada_flyte/
   _proto_compat.py   aliases vendored google.api to standard before armada_client import
   connector.py       ArmadaConnector, ArmadaJobMetadata, state mapping
   task.py            ArmadaTask, ArmadaConfig (the authoring surface)
-examples/            hello_world_dag, single_task, fanout_map
+examples/            hello_world_dag, single_task, fanout_map, gang_pipeline
 docs/                getting-started, gotchas
 tests/               unit tests, no live Armada
 ```

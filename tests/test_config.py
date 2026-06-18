@@ -25,6 +25,13 @@ def test_custom_config_keys():
     assert set(custom) == {
         "queue", "job_set_id", "image", "command", "args",
         "cpu", "memory", "namespace", "priority", "output_template",
+        "gang_id", "gang_cardinality", "gang_node_uniformity_label",
     }
     assert custom["queue"] == "compute"
     assert custom["priority"] == 5
+
+
+def test_gang_defaults_off():
+    custom = ArmadaTask(name="t", plugin_config=ArmadaConfig()).custom_config(None)
+    assert custom["gang_id"] is None
+    assert custom["gang_cardinality"] == 0

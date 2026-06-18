@@ -31,6 +31,11 @@ class ArmadaConfig:
     priority: int = 1
     # Rendered by the connector on success: ``.format(job_id=..., **inputs)``.
     output_template: str = "armada job {job_id} succeeded"
+    # Gang scheduling: tasks sharing a gang_id (all declaring the same gang_cardinality) are
+    # scheduled all-or-nothing together. Leave gang_id None for an ordinary job.
+    gang_id: Optional[str] = None
+    gang_cardinality: int = 0
+    gang_node_uniformity_label: Optional[str] = None
 
 
 class ArmadaTask(AsyncConnectorExecutorMixin, TaskTemplate):
@@ -69,4 +74,7 @@ class ArmadaTask(AsyncConnectorExecutorMixin, TaskTemplate):
             "namespace": config.namespace,
             "priority": config.priority,
             "output_template": config.output_template,
+            "gang_id": config.gang_id,
+            "gang_cardinality": config.gang_cardinality,
+            "gang_node_uniformity_label": config.gang_node_uniformity_label,
         }

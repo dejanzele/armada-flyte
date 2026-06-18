@@ -51,6 +51,28 @@ _ARMADA_STATE_TO_PHASE: Dict[int, "TaskExecution.Phase"] = {
     submit_pb2.PREEMPTED: TaskExecution.RETRYABLE_FAILED,
 }
 
+# Armada gang scheduling (internal/common/constants/constants.go). Jobs sharing a gangId, all
+# declaring the same gangCardinality, are scheduled all-or-nothing together.
+_GANG_ID_ANNOTATION = "armadaproject.io/gangId"
+_GANG_CARDINALITY_ANNOTATION = "armadaproject.io/gangCardinality"
+_GANG_NODE_UNIFORMITY_ANNOTATION = "armadaproject.io/gangNodeUniformityLabel"
+
+
+def _gang_annotations(cfg: Dict[str, Any]) -> Dict[str, str]:
+    """Translate gang_* config into Armada gang annotations, or {} for a non-gang job."""
+    gang_id = cfg.get("gang_id")
+    cardinality = int(cfg.get("gang_cardinality") or 0)
+    if not gang_id or cardinality < 2:
+        return {}
+    annotations = {
+        _GANG_ID_ANNOTATION: gang_id,
+        _GANG_CARDINALITY_ANNOTATION: str(cardinality),
+    }
+    label = cfg.get("gang_node_uniformity_label")
+    if label:
+        annotations[_GANG_NODE_UNIFORMITY_ANNOTATION] = label
+    return annotations
+
 
 @dataclass
 class ArmadaJobMetadata(ResourceMeta):
@@ -116,18 +138,21 @@ class ArmadaConnector(AsyncConnector):
         inputs = inputs or {}
 
         pod = self._build_pod_spec(cfg)
+        annotations = _gang_annotations(cfg)
         item = self.client.create_job_request_item(
             priority=float(cfg.get("priority", 1)),
             namespace=cfg.get("namespace", "default"),
             pod_spec=pod,
             labels={"flyte.org/connector": "armada"},
+            annotations=annotations,
         )
         resp = self.client.submit_jobs(queue=queue, job_set_id=job_set_id, job_request_items=[item])
         first = resp.job_response_items[0]
         if first.error:
             raise RuntimeError(f"Armada rejected job submission: {first.error}")
 
-        logger.info(f"[armada] submitted job {first.job_id} to queue={queue} job_set={job_set_id}")
+        gang = f" gang={annotations[_GANG_ID_ANNOTATION]}" if annotations else ""
+        logger.info(f"[armada] submitted job {first.job_id} to queue={queue} job_set={job_set_id}{gang}")
         return ArmadaJobMetadata(
             job_id=first.job_id,
             job_set_id=job_set_id,
