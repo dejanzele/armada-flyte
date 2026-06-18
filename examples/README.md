@@ -24,6 +24,7 @@ override with `$ARMADA_QUEUE`) is created automatically if it does not already e
 | `fanout_map.py`      | Fan-out / fan-in: N workers run concurrently via `asyncio.gather`, then one reduce node.                                                                                                       | N + 1       |
 | `gang_pipeline.py`   | `generate` then a 3-worker gang then `aggregate`. Generate's data is shared to every worker, the workers form an Armada gang (scheduled all-or-nothing), and aggregate combines their outputs. | 5           |
 | `pipeline.py`   | Same shape as `gang_pipeline.py`, but the pods do real work: a distributed sum of 1..N, sharded across the gang. Inputs are passed to each pod as env vars and the result is read back from the pod's stdout. Prints `sum(1..9) = 45`. | 5           |
+| `python_function.py` | A real Python `@env.task` (`square(x)`) whose body runs inside an Armada pod, with inputs/outputs through a blob store. Needs a MinIO reachable from the host and the cluster, and a task image loaded into the cluster (see the file header and docs/architecture.md). Prints `49`. | 1           |
 
 ## Running
 

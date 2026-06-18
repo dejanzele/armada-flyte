@@ -103,6 +103,12 @@ class ArmadaConnector(AsyncConnector):
     def __init__(self, armada_url: Optional[str] = None, binoculars_url: Optional[str] = None):
         self._url = armada_url or os.environ.get("ARMADA_URL", "localhost:50051")
         self._binoculars_url = binoculars_url or os.environ.get("BINOCULARS_URL", "localhost:50053")
+        # Blob store the Armada pods use for function-task inputs/outputs (must match the store
+        # the Flyte client uploaded to). Empty endpoint means placeholder tasks only.
+        self._blob_endpoint = os.environ.get("FLYTE_BLOB_ENDPOINT", "")
+        self._blob_key = os.environ.get("FLYTE_BLOB_ACCESS_KEY", "")
+        self._blob_secret = os.environ.get("FLYTE_BLOB_SECRET_KEY", "")
+        self._blob_region = os.environ.get("FLYTE_BLOB_REGION", "us-east-1")
         self._client: Optional[ArmadaClient] = None
 
     @property
@@ -135,6 +141,47 @@ class ArmadaConnector(AsyncConnector):
             containers=[container],
         )
 
+    def _storage_env(self) -> list:
+        """Env vars so a function-task pod can reach the blob store (S3/MinIO over plain HTTP)."""
+        if not self._blob_endpoint:
+            return []
+        return [
+            core_v1.EnvVar(name="AWS_ACCESS_KEY_ID", value=self._blob_key),
+            core_v1.EnvVar(name="AWS_SECRET_ACCESS_KEY", value=self._blob_secret),
+            core_v1.EnvVar(name="AWS_DEFAULT_REGION", value=self._blob_region),
+            core_v1.EnvVar(name="AWS_REGION", value=self._blob_region),
+            core_v1.EnvVar(name="AWS_ENDPOINT_URL", value=self._blob_endpoint),
+            core_v1.EnvVar(name="AWS_ENDPOINT_URL_S3", value=self._blob_endpoint),
+            core_v1.EnvVar(name="AWS_ALLOW_HTTP", value="true"),
+        ]
+
+    def _pod_from_flyte_container(self, c, cfg: Dict[str, Any]) -> core_v1.PodSpec:
+        """Wrap Flyte's rendered task container (the a0 entrypoint) into an Armada pod, so the
+        user's real function runs in the pod with inputs/outputs via the blob store."""
+        cpu = _quantity(cfg.get("cpu", "1"))
+        memory = _quantity(cfg.get("memory", "500Mi"))
+        requests = {"cpu": cpu, "memory": memory}
+        env = []
+        for e in c.env:
+            name = getattr(e, "name", None) or getattr(e, "key", "")
+            env.append(core_v1.EnvVar(name=name, value=e.value))
+        env.extend(self._storage_env())
+        container = core_v1.Container(
+            name="armada-task",
+            image=c.image,
+            command=list(c.command),
+            args=list(c.args),
+            env=env,
+            # Use the image already loaded into the cluster (e.g. via `kind load`).
+            imagePullPolicy="IfNotPresent",
+            resources=core_v1.ResourceRequirements(requests=requests, limits=dict(requests)),
+        )
+        return core_v1.PodSpec(
+            terminationGracePeriodSeconds=0,
+            restartPolicy="Never",
+            containers=[container],
+        )
+
     def _result_from_logs(self, job_id: str) -> Optional[str]:
         """Read the pod's stdout via binoculars and return the last RESULT_MARKER line's value."""
         try:
@@ -161,7 +208,13 @@ class ArmadaConnector(AsyncConnector):
         job_set_id = cfg.get("job_set_id", "flyte-dag")
         inputs = inputs or {}
 
-        pod = self._build_pod_spec(cfg, inputs)
+        container = getattr(task_template, "container", None)
+        if container and container.image:
+            # Real function task: run Flyte's rendered container (the a0 entrypoint) in the pod.
+            pod = self._pod_from_flyte_container(container, cfg)
+        else:
+            # Placeholder task (ArmadaTask): build the pod from ArmadaConfig.
+            pod = self._build_pod_spec(cfg, inputs)
         annotations = _gang_annotations(cfg)
         item = self.client.create_job_request_item(
             priority=float(cfg.get("priority", 1)),

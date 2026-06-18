@@ -103,9 +103,20 @@ For real compute, set `capture_result=True`. The pod then:
 
 `examples/pipeline.py` uses this to run a distributed sum across a gang.
 
-One thing is not supported yet: running an arbitrary Python function as a node body. That would
-mean shipping the task's code and moving large inputs and outputs through a blob store. See the
-[limitations and next steps](docs/architecture.md#limitations-and-next-steps).
+You can also run **real Python functions**. Set `plugin_config=ArmadaConfig(...)` on a
+`TaskEnvironment`, and every `@env.task` in it runs its body inside an Armada pod:
+
+```python
+env = flyte.TaskEnvironment("ml", image=img, plugin_config=ArmadaConfig(queue="compute"))
+
+@env.task
+async def square(x: int) -> int:
+    return x * x      # runs in the Armada pod
+```
+
+Flyte ships the task's code and moves its inputs and outputs through a blob store that both your
+process and the Armada pods can reach. See `examples/python_function.py` and
+[docs/architecture.md](docs/architecture.md#real-python-tasks).
 
 ## Documentation
 

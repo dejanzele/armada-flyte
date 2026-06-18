@@ -9,6 +9,6 @@ then author DAG nodes with :class:`armada_flyte.task.ArmadaTask`.
 import armada_flyte._proto_compat  # noqa: F401,E402
 
 from armada_flyte.connector import ArmadaConnector, ArmadaJobMetadata
-from armada_flyte.task import ArmadaConfig, ArmadaTask
+from armada_flyte.task import ArmadaConfig, ArmadaFunctionTask, ArmadaTask
 
-__all__ = ["ArmadaConnector", "ArmadaJobMetadata", "ArmadaConfig", "ArmadaTask"]
+__all__ = ["ArmadaConnector", "ArmadaJobMetadata", "ArmadaConfig", "ArmadaTask", "ArmadaFunctionTask"]

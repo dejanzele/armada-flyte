@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Type
 
 from flyte.connectors import AsyncConnectorExecutorMixin
-from flyte.extend import TaskTemplate
+from flyte.extend import AsyncFunctionTaskTemplate, TaskPluginRegistry, TaskTemplate
 from flyte.models import NativeInterface, SerializationContext
 
 
@@ -69,3 +69,36 @@ class ArmadaTask(AsyncConnectorExecutorMixin, TaskTemplate):
         # The serialised key set is exactly ArmadaConfig's field names, which the connector reads
         # back. asdict() deep-copies, so command/args are fresh lists the caller cannot mutate.
         return asdict(self.plugin_config)
+
+
+class ArmadaFunctionTask(AsyncConnectorExecutorMixin, AsyncFunctionTaskTemplate):
+    """A real Python ``@env.task`` that runs its function body inside an Armada pod.
+
+    Registered as the plugin for ``ArmadaConfig``, so a whole environment routes to Armada::
+
+        env = flyte.TaskEnvironment("ml", image=img, plugin_config=ArmadaConfig(queue="compute"))
+
+        @env.task
+        async def square(x: int) -> int:
+            return x * x
+
+    Flyte renders each task into a container (its ``a0`` entrypoint, which loads the code bundle,
+    reads inputs from the configured blob store, runs the function, and writes outputs back). The
+    connector wraps that container into an Armada job, so the function body executes in the pod.
+    For function tasks the ``ArmadaConfig`` image/command/output_template/capture_result fields are
+    ignored; only queue, namespace, priority, resources, and gang settings apply.
+    """
+
+    _TASK_TYPE = "armada"
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.task_type = self._TASK_TYPE
+
+    def custom_config(self, sctx: SerializationContext) -> Dict[str, Any]:
+        return asdict(self.plugin_config) if self.plugin_config else {}
+
+
+# Wire ArmadaConfig as a TaskEnvironment plugin_config: any env created with
+# plugin_config=ArmadaConfig(...) builds its tasks as ArmadaFunctionTask.
+TaskPluginRegistry.register(ArmadaConfig, ArmadaFunctionTask)

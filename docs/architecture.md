@@ -77,8 +77,35 @@ pod as an upper-cased env var (input `numbers` becomes `$NUMBERS`), the workload
 and prints a line `ARMADA_RESULT:<value>`, and on success the connector reads that line back from
 the pod's logs (via binoculars) and returns it as the node's output. If no such line is found it
 falls back to the template. `examples/pipeline.py` uses this to run a distributed sum across
-a gang of workers. The remaining gap to full generality is running an arbitrary Python function
-(rather than a shell workload) and moving large inputs and outputs through a blob store.
+a gang of workers.
+
+## Real Python tasks
+
+A normal `@env.task` function can run its body inside an Armada pod. Register `ArmadaConfig` as a
+`TaskEnvironment` plugin (`ArmadaFunctionTask`, wired via `TaskPluginRegistry`), then:
+
+```python
+env = flyte.TaskEnvironment("ml", image=img, plugin_config=ArmadaConfig(queue="compute"))
+
+@env.task
+async def square(x: int) -> int:
+    return x * x
+```
+
+How it works: Flyte renders the function into a container whose entrypoint is `a0` (it loads the
+code bundle, reads inputs from blob storage, runs the function, writes outputs back). For these
+tasks the connector ignores the placeholder fields and instead wraps that rendered container into
+the Armada pod, adding blob-store credentials so the pod can reach storage. The function executes
+in the pod and its return value flows back as the task output. See `examples/python_function.py`.
+
+This needs two things in place:
+
+- **A blob store** (S3, GCS, or MinIO) reachable at one address by both your process (to upload
+  the code bundle and inputs) and the Armada pods (to read them and write outputs). Set it with
+  `flyte.init(storage=...)` and tell the connector via `FLYTE_BLOB_ENDPOINT` /
+  `FLYTE_BLOB_ACCESS_KEY` / `FLYTE_BLOB_SECRET_KEY`, and use a remote `raw_data_path` (`s3://...`).
+- **A task image** carrying `flyte` plus the workflow's own dependencies (including `armada_flyte`),
+  available on the Armada cluster (for a local kind cluster, `kind load docker-image ...`).
 
 ## Execution modes
 
@@ -92,15 +119,9 @@ The connector runs in two ways with the same code:
 
 ## Limitations and next steps
 
-What works today: real Armada submission, status polling, gang scheduling, DAG dataflow, real
-in-pod compute for shell workloads (via `capture_result`), and both execution modes above.
-
-One capability is not here yet:
-
-- **Arbitrary Python tasks.** Running a normal Python function as the body of a node would mean
-  shipping the task's code bundle and threading inputs and outputs through a shared blob store
-  (S3, GCS, or MinIO) using Flyte's `a0` entrypoint, then having the connector wrap that
-  container into the Armada pod spec. Today a node runs a shell workload, not your function.
+What works today: real Armada submission, status polling, gang scheduling, DAG dataflow, in-pod
+compute for shell workloads (via `capture_result`), real Python `@env.task` functions running in
+the pod (see above), and both execution modes above.
 
 One prerequisite is outside this repo:
 
