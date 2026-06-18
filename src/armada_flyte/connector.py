@@ -31,15 +31,14 @@ from armada_client.client import ArmadaClient
 from armada_client.k8s.io.api.core.v1 import generated_pb2 as core_v1
 from armada_client.k8s.io.apimachinery.pkg.api.resource import generated_pb2 as api_resource
 from armada_client.log_client import JobLogClient
+from flyte import logger
+from flyte.connectors import AsyncConnector, ConnectorRegistry, Resource, ResourceMeta
 from flyteidl2.core.execution_pb2 import TaskExecution
 from google.protobuf import json_format
 
 # A task that wants its real output captured prints a line beginning with this marker. The
 # connector reads it back from the job's pod logs once the job succeeds.
 RESULT_MARKER = "ARMADA_RESULT:"
-
-from flyte import logger
-from flyte.connectors import AsyncConnector, ConnectorRegistry, Resource, ResourceMeta
 
 # Armada JobState (pkg/api/submit.proto:97) -> Flyte TaskExecution.Phase.
 # PREEMPTED -> RETRYABLE_FAILED so Flyte retries jobs Armada preempted (expected, not a failure).

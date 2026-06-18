@@ -8,7 +8,7 @@ connector renders into the task's ``result`` output once the Armada job succeeds
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Type
 
 from flyte.connectors import AsyncConnectorExecutorMixin
@@ -66,20 +66,6 @@ class ArmadaTask(AsyncConnectorExecutorMixin, TaskTemplate):
         self.plugin_config = plugin_config
 
     def custom_config(self, sctx: SerializationContext) -> Dict[str, Any]:
-        config = self.plugin_config
-        return {
-            "queue": config.queue,
-            "job_set_id": config.job_set_id,
-            "image": config.image,
-            "command": list(config.command),
-            "args": list(config.args),
-            "cpu": config.cpu,
-            "memory": config.memory,
-            "namespace": config.namespace,
-            "priority": config.priority,
-            "output_template": config.output_template,
-            "capture_result": config.capture_result,
-            "gang_id": config.gang_id,
-            "gang_cardinality": config.gang_cardinality,
-            "gang_node_uniformity_label": config.gang_node_uniformity_label,
-        }
+        # The serialised key set is exactly ArmadaConfig's field names, which the connector reads
+        # back. asdict() deep-copies, so command/args are fresh lists the caller cannot mutate.
+        return asdict(self.plugin_config)

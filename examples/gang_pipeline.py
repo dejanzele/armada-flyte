@@ -34,7 +34,8 @@ import tempfile
 import grpc
 import flyte
 
-# Import armada_flyte before armada_client (proto-compat shim + connector registration).
+# Import armada_flyte BEFORE armada_client: its __init__ runs the proto-compat shim that
+# prevents a duplicate google/api/http.proto registration, and registers the connector.
 from armada_flyte import ArmadaConfig, ArmadaTask
 from armada_client.client import ArmadaClient
 

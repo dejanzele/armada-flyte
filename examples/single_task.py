@@ -56,7 +56,7 @@ if __name__ == "__main__":
     flyte.init()
     run = flyte.with_runcontext(
         mode="local",
-        raw_data_path=tempfile.mkdtemp(prefix="flyte-armada-"),
+        raw_data_path=tempfile.mkdtemp(prefix="armada-flyte-"),
     ).run(greet, name="world")
 
     # ActionOutputs is a tuple subclass; [0] is the task's return value.

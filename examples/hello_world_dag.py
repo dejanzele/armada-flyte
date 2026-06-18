@@ -6,8 +6,8 @@ connector. The DAG structure and data flow (hello's output into shout's input) a
 
 Run (with the Armada localdev stack up and reachable at $ARMADA_URL, default localhost:50051):
 
-    cd flyte-armada-connector
-    PYTHONPATH=src ./.venv/bin/python examples/hello_world_dag.py
+    cd armada-flyte
+    ./.venv/bin/python examples/hello_world_dag.py
 """
 
 from __future__ import annotations
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     flyte.init()
     run = flyte.with_runcontext(
         mode="local",
-        raw_data_path=tempfile.mkdtemp(prefix="flyte-armada-"),
+        raw_data_path=tempfile.mkdtemp(prefix="armada-flyte-"),
     ).run(dag, name="world")
 
     # ActionOutputs is a tuple subclass; [0] is the DAG's return value.
