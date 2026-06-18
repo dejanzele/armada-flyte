@@ -80,18 +80,30 @@ falls back to the template. `examples/pipeline.py` uses this to run a distribute
 a gang of workers. The remaining gap to full generality is running an arbitrary Python function
 (rather than a shell workload) and moving large inputs and outputs through a blob store.
 
+## Execution modes
+
+The connector runs in two ways with the same code:
+
+- **Local execution** (`mode="local"`), where `AsyncConnectorExecutorMixin` drives the
+  create/poll loop in your process. This is what the examples use.
+- **As a gRPC service**, where a deployed Flyte backend (FlytePropeller) calls `CreateTask` and
+  `GetTask` on the connector over gRPC. Run it with `c0 --modules armada_flyte.connector` or
+  deploy it as a `ConnectorEnvironment`. See [../deploy/](../deploy/).
+
 ## Limitations and next steps
 
-What works today: real Armada submission, status polling, gang scheduling, DAG dataflow, and
-real in-pod compute for shell workloads (via `capture_result`). It runs through Flyte local
-execution.
+What works today: real Armada submission, status polling, gang scheduling, DAG dataflow, real
+in-pod compute for shell workloads (via `capture_result`), and both execution modes above.
 
-Two things are not supported yet:
+One capability is not here yet:
 
 - **Arbitrary Python tasks.** Running a normal Python function as the body of a node would mean
   shipping the task's code bundle and threading inputs and outputs through a shared blob store
   (S3, GCS, or MinIO) using Flyte's `a0` entrypoint, then having the connector wrap that
   container into the Armada pod spec. Today a node runs a shell workload, not your function.
-- **A deployed Flyte backend.** The connector only runs under Flyte local execution. Packaging it
-  as a Flyte `ConnectorEnvironment`, so a deployed Flyte backend (FlytePropeller) routes `armada`
-  tasks to it, is not done yet.
+
+One prerequisite is outside this repo:
+
+- **A deployed Flyte backend.** The connector is ready to deploy as a `ConnectorEnvironment` and
+  serves the connector gRPC API, but automatic task routing needs a running Flyte backend
+  (FlytePropeller), which this repo does not stand up.

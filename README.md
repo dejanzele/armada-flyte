@@ -70,8 +70,11 @@ The [examples](examples/) cover linear, fan-out, and gang pipelines.
 
 ### 4. Run it
 
-Everything runs through Flyte local execution (`mode="local"`), which drives the submit-and-poll
-loop in your process. There is no Flyte backend to deploy.
+The examples run through Flyte local execution (`mode="local"`), which drives the submit-and-poll
+loop in your process, so there is no backend to stand up.
+
+The connector can also run as a gRPC service that a deployed Flyte backend routes to, instead of
+local execution. See [deploy/](deploy/).
 
 ## What works today, and what does not
 
@@ -96,6 +99,7 @@ the [limitations and next steps](docs/architecture.md#limitations-and-next-steps
   scheduling, and the current limits.
 - [docs/getting-started.md](docs/getting-started.md) stand up a local Armada and run an example.
 - [docs/gotchas.md](docs/gotchas.md) the non-obvious environment and proto issues.
+- [deploy/](deploy/) run the connector as a gRPC service, or deploy it to a Flyte backend.
 
 ## License
 
