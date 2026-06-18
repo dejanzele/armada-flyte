@@ -70,16 +70,18 @@ loop in your process. There is no Flyte backend to deploy.
 
 ## What works today, and what does not
 
-This is the M1 shape. Each node submits a real Armada job and is genuinely scheduled and polled,
-but the workload is a placeholder (for example `echo`). The node's output is synthesised by the
-connector from `output_template` and inputs, not produced by your code. So today you get:
+Each node submits a real Armada job and is genuinely scheduled, run as a pod, and polled. You get:
 
 - real Flyte 2 DAG topology and data flow between nodes,
 - real Armada scheduling, including gang jobs,
-- string data threaded through the graph.
+- real per-node compute, when you opt in: with `capture_result=True` the pod does actual work
+  (its inputs arrive as env vars), prints `ARMADA_RESULT:<value>`, and the connector reads that
+  back from the pod's logs. See `examples/real_pipeline.py` (a distributed sum across a gang).
 
-What you cannot do yet is run an arbitrary Python function as the body of a node on Armada. That
-is the next milestone (M2), described in [docs/architecture.md](docs/architecture.md#roadmap).
+By default a node's output is synthesised from `output_template` rather than the workload, which
+keeps the basic examples simple. What is not here yet is running an arbitrary Python function as
+the body of a node (shipping code and large inputs/outputs through a blob store); that is the next
+milestone, described in [docs/architecture.md](docs/architecture.md#roadmap).
 
 ## Documentation
 

@@ -24,7 +24,7 @@ def test_custom_config_keys():
     custom = task.custom_config(None)
     assert set(custom) == {
         "queue", "job_set_id", "image", "command", "args",
-        "cpu", "memory", "namespace", "priority", "output_template",
+        "cpu", "memory", "namespace", "priority", "output_template", "capture_result",
         "gang_id", "gang_cardinality", "gang_node_uniformity_label",
     }
     assert custom["queue"] == "compute"

@@ -31,6 +31,10 @@ class ArmadaConfig:
     priority: int = 1
     # Rendered by the connector on success: ``.format(job_id=..., **inputs)``.
     output_template: str = "armada job {job_id} succeeded"
+    # When True, the connector reads the task's result from the pod's stdout (the last line
+    # beginning with ``ARMADA_RESULT:``) instead of rendering output_template. The pod's inputs
+    # are exposed to the workload as upper-cased env vars (input ``dataset`` becomes ``$DATASET``).
+    capture_result: bool = False
     # Gang scheduling: tasks sharing a gang_id (all declaring the same gang_cardinality) are
     # scheduled all-or-nothing together. Leave gang_id None for an ordinary job.
     gang_id: Optional[str] = None
@@ -74,6 +78,7 @@ class ArmadaTask(AsyncConnectorExecutorMixin, TaskTemplate):
             "namespace": config.namespace,
             "priority": config.priority,
             "output_template": config.output_template,
+            "capture_result": config.capture_result,
             "gang_id": config.gang_id,
             "gang_cardinality": config.gang_cardinality,
             "gang_node_uniformity_label": config.gang_node_uniformity_label,

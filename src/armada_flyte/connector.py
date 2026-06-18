@@ -29,8 +29,13 @@ from armada_client.armada import submit_pb2
 from armada_client.client import ArmadaClient
 from armada_client.k8s.io.api.core.v1 import generated_pb2 as core_v1
 from armada_client.k8s.io.apimachinery.pkg.api.resource import generated_pb2 as api_resource
+from armada_client.log_client import JobLogClient
 from flyteidl2.core.execution_pb2 import TaskExecution
 from google.protobuf import json_format
+
+# A task that wants its real output captured prints a line beginning with this marker. The
+# connector reads it back from the job's pod logs once the job succeeds.
+RESULT_MARKER = "ARMADA_RESULT:"
 
 from flyte import logger
 from flyte.connectors import AsyncConnector, ConnectorRegistry, Resource, ResourceMeta
@@ -83,6 +88,7 @@ class ArmadaJobMetadata(ResourceMeta):
     queue: str
     output_template: str = ""
     inputs: Dict[str, Any] = field(default_factory=dict)
+    capture_result: bool = False
 
 
 def _quantity(value: str) -> api_resource.Quantity:
@@ -94,8 +100,9 @@ class ArmadaConnector(AsyncConnector):
     task_type_name = "armada"
     metadata_type = ArmadaJobMetadata
 
-    def __init__(self, armada_url: Optional[str] = None):
+    def __init__(self, armada_url: Optional[str] = None, binoculars_url: Optional[str] = None):
         self._url = armada_url or os.environ.get("ARMADA_URL", "localhost:50051")
+        self._binoculars_url = binoculars_url or os.environ.get("BINOCULARS_URL", "localhost:50053")
         self._client: Optional[ArmadaClient] = None
 
     @property
@@ -105,15 +112,19 @@ class ArmadaConnector(AsyncConnector):
             self._client = ArmadaClient(grpc.insecure_channel(self._url))
         return self._client
 
-    def _build_pod_spec(self, cfg: Dict[str, Any]) -> core_v1.PodSpec:
+    def _build_pod_spec(self, cfg: Dict[str, Any], inputs: Dict[str, Any]) -> core_v1.PodSpec:
         cpu = _quantity(cfg.get("cpu", "100m"))
         memory = _quantity(cfg.get("memory", "128Mi"))
         requests = {"cpu": cpu, "memory": memory}
+        # Expose each input to the workload as an upper-cased env var, so the pod can do real
+        # work on its inputs (e.g. input "dataset" becomes $DATASET).
+        env = [core_v1.EnvVar(name=k.upper(), value=str(v)) for k, v in inputs.items()]
         container = core_v1.Container(
             name=cfg.get("container_name", "armada-task"),
             image=cfg.get("image", "busybox:latest"),
             command=list(cfg.get("command", ["sh", "-c", "echo hello from armada"])),
             args=list(cfg.get("args", [])),
+            env=env,
             # Requests == limits so the task gets a guaranteed QoS pod.
             resources=core_v1.ResourceRequirements(requests=requests, limits=dict(requests)),
         )
@@ -123,6 +134,19 @@ class ArmadaConnector(AsyncConnector):
             restartPolicy="Never",
             containers=[container],
         )
+
+    def _result_from_logs(self, job_id: str) -> Optional[str]:
+        """Read the pod's stdout via binoculars and return the last RESULT_MARKER line's value."""
+        try:
+            lines = JobLogClient(self._binoculars_url, job_id, disable_ssl=True).logs()
+        except grpc.RpcError as e:
+            logger.warning(f"[armada] could not fetch logs for {job_id}: {e.code().name}")
+            return None
+        for line in reversed(lines):
+            text = getattr(line, "line", str(line))
+            if text.startswith(RESULT_MARKER):
+                return text[len(RESULT_MARKER):].strip()
+        return None
 
     async def create(
         self,
@@ -137,7 +161,7 @@ class ArmadaConnector(AsyncConnector):
         job_set_id = cfg.get("job_set_id", "flyte-dag")
         inputs = inputs or {}
 
-        pod = self._build_pod_spec(cfg)
+        pod = self._build_pod_spec(cfg, inputs)
         annotations = _gang_annotations(cfg)
         item = self.client.create_job_request_item(
             priority=float(cfg.get("priority", 1)),
@@ -159,6 +183,7 @@ class ArmadaConnector(AsyncConnector):
             queue=queue,
             output_template=cfg.get("output_template", "armada job {job_id} succeeded"),
             inputs={k: str(v) for k, v in inputs.items()},
+            capture_result=bool(cfg.get("capture_result", False)),
         )
 
     async def get(self, resource_meta: ArmadaJobMetadata, **kwargs) -> Resource:
@@ -168,9 +193,15 @@ class ArmadaConnector(AsyncConnector):
 
         outputs = None
         if phase == TaskExecution.SUCCEEDED:
-            result = resource_meta.output_template.format(
-                job_id=resource_meta.job_id, **resource_meta.inputs
-            )
+            # If the task asked for real output, read what the pod actually printed; otherwise
+            # (and as a fallback) synthesise the output from the template and inputs.
+            result = None
+            if resource_meta.capture_result:
+                result = self._result_from_logs(resource_meta.job_id)
+            if result is None:
+                result = resource_meta.output_template.format(
+                    job_id=resource_meta.job_id, **resource_meta.inputs
+                )
             outputs = {"result": result}
 
         return Resource(

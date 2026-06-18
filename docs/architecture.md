@@ -65,13 +65,20 @@ annotations (`armadaproject.io/gangId`, `armadaproject.io/gangCardinality`) to t
 Jobs sharing a gang are scheduled all-or-nothing together. Call the same `ArmadaTask` N times
 inside the DAG to submit N gang members. See `examples/gang_pipeline.py`.
 
-## Output synthesis (the M1 boundary)
+## Output: synthesised, or read from the pod
 
-This connector does not run the user's Python inside the Armada pod. Each node submits a real
-Armada job, but with a placeholder workload (for example `echo`). On success, the connector
-synthesises the node's `result` output by rendering `ArmadaConfig.output_template` against the
-job id and the node's inputs. Data flowing between nodes is therefore real Flyte 2 dataflow, but
-the per-node computation is symbolic.
+By default the connector does not run the user's Python inside the pod. Each node submits a real
+Armada job with a placeholder workload, and on success the connector synthesises the node's
+`result` by rendering `ArmadaConfig.output_template` against the job id and inputs. Data flowing
+between nodes is real Flyte 2 dataflow, but the per-node computation is symbolic.
+
+Setting `capture_result=True` makes the compute real. The connector passes each input into the
+pod as an upper-cased env var (input `numbers` becomes `$NUMBERS`), the workload computes a value
+and prints a line `ARMADA_RESULT:<value>`, and on success the connector reads that line back from
+the pod's logs (via binoculars) and returns it as the node's output. If no such line is found it
+falls back to the template. `examples/real_pipeline.py` uses this to run a distributed sum across
+a gang of workers. The remaining gap to full generality is running an arbitrary Python function
+(rather than a shell workload) and moving large inputs and outputs through a blob store.
 
 ## Roadmap
 
