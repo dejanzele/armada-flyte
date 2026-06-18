@@ -1,0 +1,167 @@
+"""A Flyte 2 AsyncConnector that submits each task as an Armada job.
+
+The connector implements the three-method Flyte v2 connector contract:
+
+    create   submits an Armada job (Submit.SubmitJobs) and returns a job handle
+    get      polls job status (Jobs.GetJobStatus) and maps it to a Flyte phase
+    delete   cancels the job (Submit.CancelJobs)
+
+In local execution, ``flyte.connectors.AsyncConnectorExecutorMixin`` drives this loop
+in-process: it calls ``create`` once, then polls ``get`` every 3s until a terminal phase.
+
+This is the milestone-1 (M1) shape: each DAG node runs a *real* Armada job (a placeholder
+workload, e.g. ``echo``), and the node's output is synthesised by the connector from the
+task's ``output_template`` + inputs. Running the user's actual Python inside the Armada pod
+(reading inputs / writing outputs via a shared blob store) is M2 and intentionally out of scope.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
+
+import grpc
+
+# Must run before any armada_client import (aliases vendored google.api to standard).
+import armada_flyte._proto_compat  # noqa: F401
+from armada_client.armada import submit_pb2
+from armada_client.client import ArmadaClient
+from armada_client.k8s.io.api.core.v1 import generated_pb2 as core_v1
+from armada_client.k8s.io.apimachinery.pkg.api.resource import generated_pb2 as api_resource
+from flyteidl2.core.execution_pb2 import TaskExecution
+from google.protobuf import json_format
+
+from flyte import logger
+from flyte.connectors import AsyncConnector, ConnectorRegistry, Resource, ResourceMeta
+
+# Armada JobState (pkg/api/submit.proto:97) -> Flyte TaskExecution.Phase.
+# PREEMPTED -> RETRYABLE_FAILED so Flyte retries jobs Armada preempted (expected, not a failure).
+_ARMADA_STATE_TO_PHASE: Dict[int, "TaskExecution.Phase"] = {
+    submit_pb2.QUEUED: TaskExecution.QUEUED,
+    submit_pb2.SUBMITTED: TaskExecution.QUEUED,
+    submit_pb2.LEASED: TaskExecution.QUEUED,
+    submit_pb2.PENDING: TaskExecution.INITIALIZING,
+    submit_pb2.RUNNING: TaskExecution.RUNNING,
+    submit_pb2.UNKNOWN: TaskExecution.RUNNING,  # transient; keep polling
+    submit_pb2.SUCCEEDED: TaskExecution.SUCCEEDED,
+    submit_pb2.FAILED: TaskExecution.FAILED,
+    submit_pb2.REJECTED: TaskExecution.FAILED,
+    submit_pb2.CANCELLED: TaskExecution.ABORTED,
+    submit_pb2.PREEMPTED: TaskExecution.RETRYABLE_FAILED,
+}
+
+
+@dataclass
+class ArmadaJobMetadata(ResourceMeta):
+    """Handle Flyte persists between create() and get()/delete()."""
+
+    job_id: str
+    job_set_id: str
+    queue: str
+    output_template: str = ""
+    inputs: Dict[str, Any] = field(default_factory=dict)
+
+
+def _quantity(value: str) -> api_resource.Quantity:
+    return api_resource.Quantity(string=value)
+
+
+class ArmadaConnector(AsyncConnector):
+    name = "Armada Connector"
+    task_type_name = "armada"
+    metadata_type = ArmadaJobMetadata
+
+    def __init__(self, armada_url: Optional[str] = None):
+        self._url = armada_url or os.environ.get("ARMADA_URL", "localhost:50051")
+        self._client: Optional[ArmadaClient] = None
+
+    @property
+    def client(self) -> ArmadaClient:
+        # Lazily build the channel so importing the module never opens a socket.
+        if self._client is None:
+            self._client = ArmadaClient(grpc.insecure_channel(self._url))
+        return self._client
+
+    def _build_pod_spec(self, cfg: Dict[str, Any]) -> core_v1.PodSpec:
+        cpu = _quantity(cfg.get("cpu", "100m"))
+        memory = _quantity(cfg.get("memory", "128Mi"))
+        requests = {"cpu": cpu, "memory": memory}
+        container = core_v1.Container(
+            name=cfg.get("container_name", "armada-task"),
+            image=cfg.get("image", "busybox:latest"),
+            command=list(cfg.get("command", ["sh", "-c", "echo hello from armada"])),
+            args=list(cfg.get("args", [])),
+            # Requests == limits so the task gets a guaranteed QoS pod.
+            resources=core_v1.ResourceRequirements(requests=requests, limits=dict(requests)),
+        )
+        # armada_client's k8s protos use camelCase field names.
+        return core_v1.PodSpec(
+            terminationGracePeriodSeconds=0,
+            restartPolicy="Never",
+            containers=[container],
+        )
+
+    async def create(
+        self,
+        task_template,
+        output_prefix: str = "",
+        inputs: Optional[Dict[str, Any]] = None,
+        task_execution_metadata=None,
+        **kwargs,
+    ) -> ArmadaJobMetadata:
+        cfg = json_format.MessageToDict(task_template.custom) if task_template.custom else {}
+        queue = cfg.get("queue", "flyte")
+        job_set_id = cfg.get("job_set_id", "flyte-dag")
+        inputs = inputs or {}
+
+        pod = self._build_pod_spec(cfg)
+        item = self.client.create_job_request_item(
+            priority=float(cfg.get("priority", 1)),
+            namespace=cfg.get("namespace", "default"),
+            pod_spec=pod,
+            labels={"flyte.org/connector": "armada"},
+        )
+        resp = self.client.submit_jobs(queue=queue, job_set_id=job_set_id, job_request_items=[item])
+        first = resp.job_response_items[0]
+        if first.error:
+            raise RuntimeError(f"Armada rejected job submission: {first.error}")
+
+        logger.info(f"[armada] submitted job {first.job_id} to queue={queue} job_set={job_set_id}")
+        return ArmadaJobMetadata(
+            job_id=first.job_id,
+            job_set_id=job_set_id,
+            queue=queue,
+            output_template=cfg.get("output_template", "armada job {job_id} succeeded"),
+            inputs={k: str(v) for k, v in inputs.items()},
+        )
+
+    async def get(self, resource_meta: ArmadaJobMetadata, **kwargs) -> Resource:
+        states = self.client.get_job_status([resource_meta.job_id]).job_states
+        state = states.get(resource_meta.job_id, submit_pb2.UNKNOWN)
+        phase = _ARMADA_STATE_TO_PHASE.get(state, TaskExecution.RUNNING)
+
+        outputs = None
+        if phase == TaskExecution.SUCCEEDED:
+            result = resource_meta.output_template.format(
+                job_id=resource_meta.job_id, **resource_meta.inputs
+            )
+            outputs = {"result": result}
+
+        return Resource(
+            phase=phase,
+            message=f"armada job {resource_meta.job_id} state={submit_pb2.JobState.Name(state)}",
+            outputs=outputs,
+        )
+
+    async def delete(self, resource_meta: ArmadaJobMetadata, **kwargs):
+        self.client.cancel_jobs(
+            queue=resource_meta.queue,
+            job_set_id=resource_meta.job_set_id,
+            job_id=resource_meta.job_id,
+        )
+        logger.info(f"[armada] cancelled job {resource_meta.job_id}")
+
+
+# Register a default connector instance so local execution can find it by task_type.
+ConnectorRegistry.register(ArmadaConnector())
