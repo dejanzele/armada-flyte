@@ -4,19 +4,17 @@ Run a Flyte 2 DAG whose nodes execute as Armada jobs, end to end, on a local sta
 
 ## 1. Bring up Armada
 
-From a checkout of the [armada](https://github.com/armadaproject/armada) repo, start its
-dependencies and a minimal stack. You need the server, scheduler, scheduler ingester, event
-ingester, an executor, and the lookout ingester. A fake executor is enough, so no Kubernetes
-cluster is required:
+The connector needs a running Armada cluster. From a checkout of the
+[armada](https://github.com/armadaproject/armada) repo, create a local Kubernetes cluster and
+start the stack with a real executor:
 
 ```
-docker compose -f _local/docker-compose-deps.yaml up -d   # postgres, redis, pulsar
-bash _local/scripts/init.sh                                # create DBs, run migrations
-goreman -f _local/procfiles/fake-executor.Procfile start   # or your own minimal profile
+mage Kind            # create the Kind cluster and select its kube context
+mage dev:up no-auth  # dependencies, migrations, and the full Armada stack with a real executor
 ```
 
-The lookout ingester is not optional here. Armada's `GetJobStatus` reads the Lookout database,
-so without it a submitted job reports `UNKNOWN` forever and the connector never sees it finish.
+`mage Kind` selects the `kind-armada-test` context, which the executor uses to create pods. Tear
+the cluster down again with `mage KindTeardown`, and stop the dependencies with `mage dev:down`.
 
 Wait until the executor logs `Reporting current free resource` before submitting.
 

@@ -3,13 +3,6 @@
 The non-obvious things that cost time when wiring Flyte 2 to Armada. Each was hit and fixed
 while building this.
 
-## Job status comes from the Lookout database
-
-Armada's `GetJobStatus` gRPC does not read the scheduler database. It reads the Lookout
-database (`internal/server/queryapi/query_api.go`). If the lookout ingester is not running, a
-job can submit and even succeed while `GetJobStatus` keeps returning `UNKNOWN`. The connector
-polls that API, so the lookout ingester has to be up.
-
 ## armada_client and Flyte both ship google/api protos
 
 `armada_client` vendors its own `armada_client.google.api`, and Flyte's `flyteidl2` registers

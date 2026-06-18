@@ -7,9 +7,8 @@ completion, and synthesises the node's output from `ArmadaConfig.output_template
 
 ## Prerequisites
 
-- The Armada localdev stack running and reachable at `$ARMADA_URL` (default `localhost:50051`).
-  The connector's `GetJobStatus` reads the Lookout DB, so `lookoutingester` must be running or
-  job status stays `UNKNOWN`.
+- A running Armada cluster reachable at `$ARMADA_URL` (default `localhost:50051`). See
+  [../docs/getting-started.md](../docs/getting-started.md) to stand one up locally.
 - An editable install of this package (`pip install -e ".[dev]"`), so `armada_flyte` and
   `armada_client` resolve without setting `PYTHONPATH`.
 
@@ -18,12 +17,12 @@ override with `$ARMADA_QUEUE`) is created automatically if it does not already e
 
 ## Examples
 
-| File | What it shows | Armada jobs |
-|------|---------------|-------------|
-| `single_task.py` | The simplest case: ONE `ArmadaTask` run directly (no DAG). | 1 |
-| `hello_world_dag.py` | A two-node DAG where `shout` depends on `hello` (linear data flow). | 2 |
-| `fanout_map.py` | Fan-out / fan-in: N workers run concurrently via `asyncio.gather`, then one reduce node. | N + 1 |
-| `gang_pipeline.py` | `generate` then a 3-worker gang then `aggregate`. Generate's data is shared to every worker, the workers form an Armada gang (scheduled all-or-nothing), and aggregate combines their outputs. | 5 |
+| File                 | What it shows                                                                                                                                                                                  | Armada jobs |
+|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| `single_task.py`     | The simplest case: ONE `ArmadaTask` run directly (no DAG).                                                                                                                                     | 1           |
+| `hello_world_dag.py` | A two-node DAG where `shout` depends on `hello` (linear data flow).                                                                                                                            | 2           |
+| `fanout_map.py`      | Fan-out / fan-in: N workers run concurrently via `asyncio.gather`, then one reduce node.                                                                                                       | N + 1       |
+| `gang_pipeline.py`   | `generate` then a 3-worker gang then `aggregate`. Generate's data is shared to every worker, the workers form an Armada gang (scheduled all-or-nothing), and aggregate combines their outputs. | 5           |
 
 ## Running
 
