@@ -25,6 +25,7 @@ override with `$ARMADA_QUEUE`) is created automatically if it does not already e
 | `gang_pipeline.py`   | `generate` then a 3-worker gang then `aggregate`. Generate's data is shared to every worker, the workers form an Armada gang (scheduled all-or-nothing), and aggregate combines their outputs. | 5           |
 | `pipeline.py`   | Same shape as `gang_pipeline.py`, but the pods do real work: a distributed sum of 1..N, sharded across the gang. Inputs are passed to each pod as env vars and the result is read back from the pod's stdout. Prints `sum(1..9) = 45`. | 5           |
 | `python_function.py` | A real Python `@env.task` (`square(x)`) whose body runs inside an Armada pod, with inputs/outputs through a blob store. Needs a MinIO reachable from the host and the cluster, and a task image loaded into the cluster (see the file header and docs/architecture.md). Prints `49`. | 1           |
+| `python_pipeline.py` | A real multi-stage map-reduce: `generate` then 4 parallel `shard_stats` then `merge`, each stage's actual Python running in an Armada pod with typed data (a `Stats` dataclass) flowing between them. Run it with one command via `run_python_pipeline.sh`. | 6           |
 
 ## Running
 
@@ -48,4 +49,12 @@ in-pod compute (a distributed sum):
 ```bash
 ./.venv/bin/python examples/gang_pipeline.py
 ./.venv/bin/python examples/pipeline.py
+```
+
+The two real-Python examples (`python_function.py`, `python_pipeline.py`) run your actual function
+body in the pod, so they also need a blob store and a task image in the cluster. `run_python_pipeline.sh`
+sets all of that up and runs the map-reduce in one command:
+
+```bash
+./examples/run_python_pipeline.sh
 ```
