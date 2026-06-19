@@ -26,7 +26,7 @@ def _container(reqs=None):
         return [SimpleNamespace(name=k, value=v) for k, v in (d or {}).items()]
 
     return SimpleNamespace(
-        image="task-img:latest", command=[], args=["a0"], env=[],
+        image="task-img:latest", command=[], args=["a0", "--outputs-path", "s3://b/out"], env=[],
         resources=SimpleNamespace(requests=entries(reqs), limits=entries(None)),
     )
 
@@ -42,6 +42,7 @@ async def test_create_submits_and_returns_handle(connector, mock_client, make_cu
     assert meta.job_id == "01created"
     assert meta.queue == "flyte"
     assert meta.job_set_id == "flyte-dag"
+    assert meta.output_prefix == "s3://b/out"  # extracted from the a0 --outputs-path arg
 
     # The rendered container was wrapped into the submitted pod, on the default queue.
     kwargs = mock_client.create_job_request_item.call_args.kwargs

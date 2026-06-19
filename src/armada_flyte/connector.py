@@ -88,6 +88,8 @@ class ArmadaJobMetadata(ResourceMeta):
     job_id: str
     job_set_id: str
     queue: str
+    # The blob location a0 writes outputs/errors to; get() reads error.pb from here on a terminal job.
+    output_prefix: str = ""
 
 
 def _quantity(value: str) -> api_resource.Quantity:
@@ -201,6 +203,18 @@ class ArmadaConnector(AsyncConnector):
             return ""
 
     @staticmethod
+    def _outputs_path(args) -> str:
+        """The blob prefix a0 writes outputs.pb / error.pb to. Flyte renders it into the container's
+        ``--outputs-path`` arg; the output_prefix passed to create() is only the base raw-data dir,
+        not this per-action location, so we read it from the args (and store it for get() to use)."""
+        args = list(args)
+        if "--outputs-path" in args:
+            i = args.index("--outputs-path")
+            if i + 1 < len(args):
+                return args[i + 1]
+        return ""
+
+    @staticmethod
     def _runtime_args(args: list, output_prefix: str, meta) -> list:
         """Fill in the runtime arguments the backend leaves for the executor to substitute.
 
@@ -308,7 +322,31 @@ class ArmadaConnector(AsyncConnector):
 
         gang = f" gang={annotations[_GANG_ID_ANNOTATION]}" if annotations else ""
         logger.info(f"[armada] submitted job {first.job_id} to queue={queue} job_set={job_set_id}{gang}")
-        return ArmadaJobMetadata(job_id=first.job_id, job_set_id=job_set_id, queue=queue)
+        return ArmadaJobMetadata(
+            job_id=first.job_id,
+            job_set_id=job_set_id,
+            queue=queue,
+            output_prefix=self._outputs_path(container.args),
+        )
+
+    async def _task_error(self, output_prefix: str) -> Optional[str]:
+        """The task's real failure (its message and traceback) from a0's error file, or None.
+
+        a0 writes error.pb on a task error but the pod can still exit 0, so Armada (which only sees
+        the pod exit) may report the job SUCCEEDED while the task actually failed. We read error.pb
+        and let it decide, exactly as FlytePropeller does; otherwise the failure is invisible and the
+        framework later mis-reports the missing output as a type error. Best-effort: a missing file
+        or unreadable storage just means there is no task error to report.
+        """
+        if not output_prefix:
+            return None
+        try:
+            from flyte._internal.runtime.io import error_path, load_error
+
+            err = await load_error(error_path(output_prefix))
+            return err.message or None
+        except Exception:  # noqa: BLE001 - never let error reporting make the failure worse
+            return None
 
     async def get(self, resource_meta: ArmadaJobMetadata, **kwargs) -> Resource:
         states = self._call(
@@ -316,8 +354,13 @@ class ArmadaConnector(AsyncConnector):
         ).job_states
         state = states.get(resource_meta.job_id, submit_pb2.UNKNOWN)
         phase = _ARMADA_STATE_TO_PHASE.get(state, TaskExecution.RUNNING)
-        # a0 writes the task's typed output to the output location, so there is nothing for the
-        # connector to synthesise; Flyte reads the output from that location on success.
+        # On a terminal job, a0's error file decides failure (see _task_error): the task can fail
+        # while Armada reports the pod as succeeded. a0 writes the task's typed output to the output
+        # location otherwise, which Flyte reads on success, so there is nothing to synthesise here.
+        if phase in (TaskExecution.SUCCEEDED, TaskExecution.FAILED):
+            message = await self._task_error(resource_meta.output_prefix)
+            if message is not None:
+                return Resource(phase=TaskExecution.FAILED, message=message)
         return Resource(
             phase=phase,
             message=f"armada job {resource_meta.job_id} state={submit_pb2.JobState.Name(state)}",

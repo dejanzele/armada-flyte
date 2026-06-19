@@ -53,3 +53,36 @@ async def test_get_unknown_when_job_absent(connector, mock_client):
     mock_client.get_job_status.return_value.job_states = {}
     resource = await connector.get(_meta())
     assert resource.phase == TaskExecution.RUNNING
+
+
+def _meta_with_output() -> ArmadaJobMetadata:
+    return ArmadaJobMetadata(job_id="01job", job_set_id="flyte-dag", queue="flyte", output_prefix="s3://b/out")
+
+
+async def test_get_surfaces_task_error_on_terminal(connector, mock_client, monkeypatch):
+    # a0 wrote error.pb: even though Armada reports the job SUCCEEDED (the pod exited 0), get()
+    # reports FAILED with the task's real reason, not a misleading missing-output error.
+    import flyte._internal.runtime.io as flyte_io
+    from flyteidl2.core import execution_pb2
+
+    async def fake_load_error(path):
+        return execution_pb2.ExecutionError(message="ValueError: boom\n  ...traceback...")
+
+    monkeypatch.setattr(flyte_io, "load_error", fake_load_error)
+    mock_client.get_job_status.return_value.job_states = {"01job": submit_pb2.SUCCEEDED}
+    resource = await connector.get(_meta_with_output())
+    assert resource.phase == TaskExecution.FAILED
+    assert "boom" in resource.message
+
+
+async def test_get_succeeded_when_no_error_file(connector, mock_client, monkeypatch):
+    # No error.pb (the read raises): a genuine success stays SUCCEEDED.
+    import flyte._internal.runtime.io as flyte_io
+
+    async def fake_load_error(path):
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(flyte_io, "load_error", fake_load_error)
+    mock_client.get_job_status.return_value.job_states = {"01job": submit_pb2.SUCCEEDED}
+    resource = await connector.get(_meta_with_output())
+    assert resource.phase == TaskExecution.SUCCEEDED
