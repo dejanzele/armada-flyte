@@ -89,6 +89,9 @@ class ArmadaJobMetadata(ResourceMeta):
     output_template: str = ""
     inputs: Dict[str, Any] = field(default_factory=dict)
     capture_result: bool = False
+    # True for real @env.task functions: a0 writes the real (typed) output to the output location,
+    # so get() must not synthesise one (which would overwrite it on the backend path).
+    is_function_task: bool = False
 
 
 def _quantity(value: str) -> api_resource.Quantity:
@@ -155,22 +158,60 @@ class ArmadaConnector(AsyncConnector):
             core_v1.EnvVar(name="AWS_ALLOW_HTTP", value="true"),
         ]
 
-    def _pod_from_flyte_container(self, c, cfg: Dict[str, Any]) -> core_v1.PodSpec:
+    @staticmethod
+    def _runtime_args(args: list, output_prefix: str, meta) -> list:
+        """Fill in the runtime arguments the backend leaves for the executor to substitute.
+
+        In local execution the SDK renders these; in backend execution FlytePropeller normally
+        does, but the connector (webapi) plugin does not, so the a0 args arrive with unfilled
+        ``{{.runName}}``/``{{.actionName}}`` placeholders and no ``--run-base-dir`` (which a0
+        requires). We fill them from the task execution metadata. Both are conditional, so this is
+        a no-op on the already-complete local args.
+        """
+        run_name = action_name = project = domain = org = ""
+        try:
+            tid = meta.task_execution_id.task_id
+            project, domain = tid.project, tid.domain
+            ne = meta.task_execution_id.node_execution_id
+            run_name = ne.execution_id.name
+            action_name = ne.node_id
+        except AttributeError:
+            pass
+        # labels is a protobuf map<string,string>; organization carries the org.
+        try:
+            org = meta.labels.get("organization", "")
+        except (AttributeError, TypeError):
+            pass
+        subs = {"{{.runName}}": run_name, "{{.actionName}}": action_name}
+        args = [subs.get(a, a) for a in args]
+        # output_prefix ends in /<run>/<action>/<attempt>; the run base dir drops action+attempt.
+        if "--run-base-dir" not in args and output_prefix:
+            args = args + ["--run-base-dir", output_prefix.rsplit("/", 2)[0]]
+        # a0 requires org (and project/domain) which the backend leaves for the executor to fill.
+        for flag, val in (("--org", org), ("--project", project), ("--domain", domain)):
+            if flag not in args and val:
+                args = args + [flag, val]
+        return args
+
+    def _pod_from_flyte_container(self, c, cfg: Dict[str, Any], output_prefix: str = "", meta=None) -> core_v1.PodSpec:
         """Wrap Flyte's rendered task container (the a0 entrypoint) into an Armada pod, so the
         user's real function runs in the pod with inputs/outputs via the blob store."""
         cpu = _quantity(cfg.get("cpu", "1"))
         memory = _quantity(cfg.get("memory", "500Mi"))
         requests = {"cpu": cpu, "memory": memory}
-        env = []
+        # Build env from the rendered container, then let our blob-store env override any matching
+        # keys (e.g. a backend may bake an in-cluster storage endpoint the Armada pods can't reach).
+        env_by_name: Dict[str, str] = {}
         for e in c.env:
-            name = getattr(e, "name", None) or getattr(e, "key", "")
-            env.append(core_v1.EnvVar(name=name, value=e.value))
-        env.extend(self._storage_env())
+            env_by_name[getattr(e, "name", None) or getattr(e, "key", "")] = e.value
+        for ev in self._storage_env():
+            env_by_name[ev.name] = ev.value
+        env = [core_v1.EnvVar(name=n, value=v) for n, v in env_by_name.items()]
         container = core_v1.Container(
             name="armada-task",
             image=c.image,
             command=list(c.command),
-            args=list(c.args),
+            args=self._runtime_args(list(c.args), output_prefix, meta),
             env=env,
             # Use the image already loaded into the cluster (e.g. via `kind load`).
             imagePullPolicy="IfNotPresent",
@@ -209,9 +250,10 @@ class ArmadaConnector(AsyncConnector):
         inputs = inputs or {}
 
         container = getattr(task_template, "container", None)
-        if container and container.image:
+        is_function_task = bool(container and container.image)
+        if is_function_task:
             # Real function task: run Flyte's rendered container (the a0 entrypoint) in the pod.
-            pod = self._pod_from_flyte_container(container, cfg)
+            pod = self._pod_from_flyte_container(container, cfg, output_prefix, task_execution_metadata)
         else:
             # Placeholder task (ArmadaTask): build the pod from ArmadaConfig.
             pod = self._build_pod_spec(cfg, inputs)
@@ -237,6 +279,7 @@ class ArmadaConnector(AsyncConnector):
             output_template=cfg.get("output_template", "armada job {job_id} succeeded"),
             inputs={k: str(v) for k, v in inputs.items()},
             capture_result=bool(cfg.get("capture_result", False)),
+            is_function_task=is_function_task,
         )
 
     async def get(self, resource_meta: ArmadaJobMetadata, **kwargs) -> Resource:
@@ -245,9 +288,10 @@ class ArmadaConnector(AsyncConnector):
         phase = _ARMADA_STATE_TO_PHASE.get(state, TaskExecution.RUNNING)
 
         outputs = None
-        if phase == TaskExecution.SUCCEEDED:
-            # If the task asked for real output, read what the pod actually printed; otherwise
-            # (and as a fallback) synthesise the output from the template and inputs.
+        if phase == TaskExecution.SUCCEEDED and not resource_meta.is_function_task:
+            # Placeholder task: if it asked for real output, read what the pod printed; otherwise
+            # (and as a fallback) synthesise the output from the template and inputs. Function tasks
+            # are skipped here: a0 already wrote their real typed output to the output location.
             result = None
             if resource_meta.capture_result:
                 result = self._result_from_logs(resource_meta.job_id)
