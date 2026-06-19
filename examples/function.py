@@ -4,7 +4,6 @@ The only Armada-specific line is plugin_config=ArmadaConfig(queue=...). Resource
 stock-Flyte way via flyte.Resources. Run:
 
     ./demo/run.sh examples/function.py               # default: runs on Armada, shows in the Flyte UI
-    ./examples/run_local.sh examples/function.py     # also available: a local run for fast iteration
 """
 
 from __future__ import annotations

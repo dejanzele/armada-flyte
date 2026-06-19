@@ -9,7 +9,6 @@ The cross-validation jobs are INDEPENDENT (no gang): alphas x k parallel Armada 
 models by adding them to the task image. Run:
 
     ./demo/run.sh examples/ml_pipeline.py              # default: runs on Armada, shows in the Flyte UI
-    ./examples/run_local.sh examples/ml_pipeline.py    # also available: a local run for fast iteration
 """
 
 from __future__ import annotations
@@ -30,8 +29,8 @@ work = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu="500m", memory="512Mi"),
     plugin_config=ArmadaConfig(queue="flyte"),
 )
-# The driver orchestrates the pipeline. On a backend it runs as a pod, so it needs the same task
-# image; locally it runs in-process and the image is unused. Setting it always is safe.
+# The driver orchestrates the pipeline. It runs as a backend pod, so it needs the same task
+# image.
 driver = flyte.TaskEnvironment(name="driver", image=IMAGE, depends_on=[work])
 
 

@@ -17,7 +17,7 @@ Five examples, in order:
 ## Run one
 
 The runner builds the task image, wires the blob store, and submits the example through the Flyte
-backend (the default, so the run shows up in the Flyte UI):
+backend, so the run shows up in the Flyte UI:
 
 ```bash
 ./demo/run.sh examples/hello.py
@@ -25,13 +25,6 @@ backend (the default, so the run shows up in the Flyte UI):
 
 Pass any example as the argument. Prerequisite: a running Armada cluster and a Flyte 2 backend (see
 [../docs/getting-started.md](../docs/getting-started.md)).
-
-You can also run an example locally for fast iteration, with no Flyte backend needed. It runs the
-task in-process and prints the result in your terminal:
-
-```bash
-./examples/run_local.sh examples/hello.py
-```
 
 ## What you write
 

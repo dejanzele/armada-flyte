@@ -79,8 +79,8 @@ Flyte renders each task into a self-contained container.
 
 The connector wraps that container into an Armada job, submits it, and polls until it finishes.
 
-By default the connector runs as a service that a deployed Flyte backend routes to, so every run
-lands in the Flyte UI. It can also run in your own process for quick local iteration.
+The connector runs as a service that a deployed Flyte backend routes to, so every run lands in the
+Flyte UI.
 
 ## Next steps
 
@@ -98,9 +98,6 @@ Go from zero to a job in the Flyte UI:
 5. **Go further.** Understand the internals in [How it works](docs/architecture.md) (the connector,
    state mapping, gang scheduling). Deploy the connector as a service for hands-off routing in
    [deploy/](deploy/). Hit something odd? [Gotchas](docs/gotchas.md) lists the non-obvious traps.
-
-Prefer a tight inner loop first? You can also run any example locally, in-process and without a
-backend, for fast iteration: `./examples/run_local.sh examples/hello.py`.
 
 ## License
 

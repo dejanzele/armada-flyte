@@ -102,15 +102,6 @@ typed result. Then try the other examples through the backend, for example
 `./demo/run.sh examples/fanout.py` (a parallel fan-out) and `./demo/run.sh examples/gang.py` (an
 all-or-nothing gang). The example surface is described in [../examples/](../examples/).
 
-## Iterate faster locally
-
-Before wiring up a backend, you can run any example in-process to check your task logic. This skips
-the Flyte UI and prints the result in your terminal, and needs only the Armada cluster from step 1:
-
-```
-./examples/run_local.sh examples/hello.py
-```
-
 ## Configuration
 
 The connector's settings (endpoint, the blob store the pods use, and later auth/TLS) resolve in
@@ -121,7 +112,7 @@ this order, lowest to highest: built-in defaults, then the environment, then in-
   The run scripts set these for you.
 - **In code**: `armada_flyte.configure(armada_url=...)`, called before the first task runs. This is
   the home for credentials (it never reaches your task config or the control-plane DB). For the
-  backend, call it in the connector service launcher; for a local run, in your run script.
+  backend, call it in the connector service launcher.
 
 Settings resolve lazily on first use, so `configure()` works after `import armada_flyte` (no
 set-the-env-var-before-import ordering trap).

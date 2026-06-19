@@ -1,7 +1,6 @@
 """Hello world: the smallest Armada task. One @env.task, one line of Armada config.
 
-    ./demo/run.sh examples/hello.py                  # the default: runs on Armada, shows in the Flyte UI
-    ./examples/run_local.sh examples/hello.py        # also available: a local run for fast iteration
+    ./demo/run.sh examples/hello.py                  # runs on Armada, shows in the Flyte UI
 """
 
 from __future__ import annotations

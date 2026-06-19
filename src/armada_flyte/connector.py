@@ -6,8 +6,8 @@ The connector implements the three-method Flyte v2 connector contract:
     get      polls job status (Jobs.GetJobStatus) and maps it to a Flyte phase
     delete   cancels the job (Submit.CancelJobs)
 
-In local execution, ``flyte.connectors.AsyncConnectorExecutorMixin`` drives this loop
-in-process: it calls ``create`` once, then polls ``get`` every 3s until a terminal phase.
+A deployed Flyte backend drives this loop: it calls ``create`` once, then polls ``get`` every 3s
+until a terminal phase.
 
 A task is a Flyte 2 ``@env.task`` function. Flyte renders it into a container (its ``a0``
 entrypoint); the connector wraps that container into an Armada job, so the function body runs in

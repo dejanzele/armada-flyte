@@ -1,9 +1,7 @@
 # Running the connector as a service
 
-The examples default to running on a Flyte backend: the connector runs there as a long-running
-gRPC service that FlytePropeller routes `armada` tasks to. (The same connector code can also run in
-your own process for fast local iteration; see [getting started](../docs/getting-started.md).) This
-page is about running it as that service.
+The examples run on a Flyte backend: the connector runs there as a long-running gRPC service that
+FlytePropeller routes `armada` tasks to. This page is about running that service.
 
 ## Run the service locally
 

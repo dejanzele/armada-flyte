@@ -71,5 +71,4 @@ else
 fi
 
 echo "==> 3/3  Run $EXAMPLE through the backend"
-# The merged examples branch on BACKEND: the demo always runs the backend path (Flyte UI).
-exec env BACKEND=1 "$PY" "$EXAMPLE"
+exec "$PY" "$EXAMPLE"

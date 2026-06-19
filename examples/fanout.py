@@ -10,7 +10,6 @@ primitive for embarrassingly-parallel work (a parameter sweep, Monte-Carlo paths
 A typed dataclass (Stats) flows between the stages. Run:
 
     ./demo/run.sh examples/fanout.py                 # default: runs on Armada, shows in the Flyte UI
-    ./examples/run_local.sh examples/fanout.py       # also available: a local run for fast iteration
 """
 
 from __future__ import annotations
@@ -30,8 +29,8 @@ work = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=1, memory="512Mi"),
     plugin_config=ArmadaConfig(queue="flyte"),
 )
-# The driver orchestrates the fan-out / fan-in. On a backend it runs as a pod, so it needs the same
-# task image; locally it runs in-process and the image is unused. Setting it always is safe.
+# The driver orchestrates the fan-out / fan-in. It runs as a backend pod, so it needs the same
+# task image.
 driver = flyte.TaskEnvironment(name="driver", image=IMAGE, depends_on=[work])
 
 
