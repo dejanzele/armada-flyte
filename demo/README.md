@@ -12,18 +12,9 @@ square(7) = 49  (real Python, computed in an Armada pod, via the Flyte backend)
 
 ## What you write
 
-Stock Flyte 2. The only Armada-specific line is `plugin_config`:
-
-```python
-env = flyte.TaskEnvironment("ml", image="armada-flyte-task:latest",
-                            plugin_config=ArmadaConfig(queue="flyte"))
-
-@env.task
-async def square(x: int) -> int:
-    return x * x
-
-flyte.run(square, x=7)
-```
+A stock `@env.task` (see the [README](../README.md#the-whole-integration)); the only Armada-specific
+line is `plugin_config=ArmadaConfig(...)` on the environment. The demo registers it with the backend
+via `flyte.run`, so the run appears in the Flyte UI.
 
 ## Run it
 
