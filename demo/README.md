@@ -43,13 +43,11 @@ The script does the wiring; it assumes two things are already running:
    mage dev:up no-auth  # Armada with a real executor
    ```
 
-2. **A Flyte 2 backend** whose executor registers the Armada connector plugin. Stock Flyte 2 does
-   not, so build it from [dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1):
-
-   ```bash
-   git clone -b armada https://github.com/dejanzele/flyte.git
-   cd flyte && make devbox-build && make devbox-run   # Flyte UI on http://localhost:30080
-   ```
+2. **A Flyte 2 backend** in its own cluster, separate from Armada's, whose executor registers the
+   Armada connector plugin. Build and run it from
+   [dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1).
+   [../docs/getting-started.md](../docs/getting-started.md) step 2 has the build and how to avoid the
+   port 6443 clash with the Armada cluster.
 
 Override defaults via env vars: `KIND_CLUSTER`, `DEVBOX`, `ARMADA_URL`, `HOST_IP`.
 

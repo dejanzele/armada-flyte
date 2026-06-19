@@ -29,24 +29,38 @@ go run cmd/armadactl/main.go create queue flyte
 
 Tear the cluster down later with `mage KindTeardown`, and stop the dependencies with `mage dev:down`.
 
-## 2. Bring up a Flyte backend (with the Armada connector plugin)
+## 2. Bring up a Flyte backend (a second cluster)
 
-The backend routes `armada` tasks to the connector and shows runs in the Flyte UI. It must be a
-Flyte 2 backend whose executor registers the Armada connector plugin. Stock Flyte 2 does not register
-it (the patch is [dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1), upstreaming in
-progress), so build the backend from that branch. Its bundled devbox is a k3d cluster with everything
-pre-installed (the TaskAction CRD, Knative, PostgreSQL, and a blob store):
+This is a separate cluster from Armada's, and that is by design. Armada runs your job pods on its own
+kind cluster (step 1). The Flyte backend runs in its own k3d cluster, a "devbox" that holds the Flyte
+control plane, the UI, and a blob store. It routes `armada` tasks to the connector, which submits them
+to Armada, so the pods land on the Armada cluster. The two clusters talk through the connector service.
+
+Stock Flyte 2 does not register the Armada connector plugin (the patch is
+[dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1), upstreaming in progress), so build the
+devbox from that branch:
 
 ```
 git clone -b armada https://github.com/dejanzele/flyte.git
 cd flyte
 make devbox-build    # one-time: builds the devbox image including the connector plugin (a heavy build)
-make devbox-run      # starts it; the Flyte UI comes up on http://localhost:30080
 ```
 
-This is the one prerequisite this repo does not stand up for you. Once `http://localhost:30080`
-answers, continue. [../demo/](../demo/) describes what the run script expects from the backend (the
-devbox container name, blob store, and ports).
+Both clusters expose their Kubernetes API on host port 6443, and the Armada cluster (step 1) already
+took it. The devbox does not need its host API port for this setup (inspect it with
+`docker exec flyte-devbox kubectl ...` instead), so start it without publishing 6443:
+
+```
+docker run -d --rm --privileged --name flyte-devbox \
+  --add-host host.docker.internal:host-gateway --env FLYTE_DEV=False \
+  --volume flyte-devbox:/var/lib/flyte/storage \
+  -p 30000:30000 -p 30001:5432 -p 30002:30002 -p 30080:30080 -p 30081:30081 \
+  flyte-devbox:latest
+```
+
+`make devbox-run` does the same but also publishes 6443, which collides with the Armada cluster. The
+Flyte UI comes up on `http://localhost:30080`; once it answers, continue. Stop the devbox later with
+`docker rm -f flyte-devbox`. [../demo/](../demo/) describes what the run script expects from it.
 
 ## 3. Install this package
 
