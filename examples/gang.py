@@ -44,6 +44,9 @@ work = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=1, memory="512Mi"),
     plugin_config=ArmadaConfig(queue="flyte", gang_id="distributed-average", gang_cardinality=WORKERS),
 )
+# The driver orchestrates the gang. On a backend it runs as a pod, so it needs the same task image;
+# locally it runs in-process and the image is unused. Setting it always is safe. (Note the driver is
+# not in the worker env, so it carries no gang_cardinality and is not itself a gang member.)
 driver = flyte.TaskEnvironment(name="driver", image=IMAGE, depends_on=[work])
 
 
