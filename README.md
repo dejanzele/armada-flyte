@@ -75,10 +75,12 @@ flowchart LR
     D -. result .-> A
 ```
 
-Flyte renders each task into a self-contained container; the connector wraps it into an Armada
-job, submits it, and polls to completion. By default the connector runs as a service a deployed
-Flyte backend routes to, so every run lands in the Flyte UI. The same connector can also run in
-your own process for quick local iteration.
+Flyte renders each task into a self-contained container.
+
+The connector wraps that container into an Armada job, submits it, and polls until it finishes.
+
+By default the connector runs as a service that a deployed Flyte backend routes to, so every run
+lands in the Flyte UI. It can also run in your own process for quick local iteration.
 
 ## Next steps
 
