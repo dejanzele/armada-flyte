@@ -10,7 +10,7 @@
 #   - runs the example and prints the result.
 #
 # Run a different example by passing it as an argument (default: examples/function.py):
-#   ./demo/run.sh examples/gang_dag.py
+#   ./demo/run.sh examples/ml_pipeline.py
 #
 # One-time prerequisites are in demo/README.md (an Armada cluster, and a Flyte backend whose
 # executor routes `armada` tasks to the connector). Override defaults with env vars if needed:

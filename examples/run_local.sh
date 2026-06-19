@@ -3,8 +3,8 @@
 # (a host MinIO) and the task image the pods need, then runs the example.
 #
 #   ./examples/run_local.sh                              # default: examples/function.py
-#   ./examples/run_local.sh examples/python_function.py
-#   ./examples/run_local.sh examples/gang_dag.py
+#   ./examples/run_local.sh examples/fanout.py
+#   ./examples/run_local.sh examples/ml_pipeline.py
 #
 # Prerequisite: a running Armada localdev stack with a real executor on a kind cluster
 # (default cluster: armada-test). For backend execution (Flyte UI) see ./demo/run.sh instead.
