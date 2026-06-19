@@ -34,34 +34,29 @@ To use the connector in your own project instead of this repo, install it direct
 pip install "armada-flyte @ git+https://github.com/armadaproject/armada-flyte.git"
 ```
 
-## 3. Run the example
+## 3. Run an example
+
+The runner builds the task image, wires a blob store, and runs the example in one command:
 
 ```
-./.venv/bin/python examples/hello_world_dag.py
+./examples/run_local.sh examples/function.py
 ```
 
-You should see two jobs submitted (`hello`, then `shout`, which depends on it) and a final
-line built from both:
+It runs a Black-Scholes price as a real `@env.task` in an Armada pod and prints:
 
 ```
-[setup] created Armada queue 'flyte'
-submitted job 01k... to queue=flyte job_set=flyte-dag
-submitted job 01k... to queue=flyte job_set=flyte-dag
-
-=== DAG result (flowed through 2 real Armada jobs) ===
-SHOUT<Hello, world! (ran as armada job 01k...)> (ran as armada job 01k...)
+call price = 10.4506  (expected ~10.4506, computed in an Armada pod)
 ```
 
-The second job is submitted only after the first reaches `SUCCEEDED`, which is the data
-dependency in the DAG driving real Armada scheduling.
+Then try `examples/fanout.py` (a parallel fan-out) and `examples/ml_pipeline.py` (a full ML
+pipeline). To run on a Flyte backend and see it in the Flyte UI, use `./demo/run.sh <example>`
+(see [../demo/](../demo/)). The example surface is described in [../examples/](../examples/).
 
 ## Configuration
 
-Both are read from the environment:
-
-- `ARMADA_URL` (default `localhost:50051`): the Armada submit/status gRPC endpoint.
-- `ARMADA_QUEUE` (default `flyte`): the queue jobs are submitted to. Each example creates it
-  if it does not exist.
+- `ARMADA_URL` (default `localhost:50051`): the Armada submit/status gRPC endpoint, read by the
+  connector.
+- `ARMADA_TASK_IMAGE` (default `armada-flyte-task:v1`): the task image the runner builds and loads.
 
 If something does not behave, check [gotchas.md](gotchas.md) first. Most setup problems are
 listed there.

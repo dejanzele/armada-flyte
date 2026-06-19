@@ -25,11 +25,11 @@ via `flyte.run`, so the run appears in the Flyte UI.
 The script builds the task image, loads it into the Armada cluster, points the connector at the
 backend's blob store, and runs the task. It prints the UI link and the result.
 
-Run a different example by passing it, for example the gang DAG (`generate`, a gang of 3 workers,
-`aggregate`), which runs end to end through the backend:
+Run a different example by passing it, for example the multi-stage ML pipeline (make data,
+parallel cross-validation, fit, evaluate), which runs end to end through the backend:
 
 ```bash
-./demo/run.sh examples/gang_dag.py
+./demo/run.sh examples/ml_pipeline.py
 ```
 
 ## One-time prerequisites

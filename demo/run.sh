@@ -9,7 +9,7 @@
 #   - starts the connector service pointed at that store,
 #   - runs the example and prints the result.
 #
-# Run a different example by passing it as an argument (default: examples/python_function.py):
+# Run a different example by passing it as an argument (default: examples/function.py):
 #   ./demo/run.sh examples/gang_dag.py
 #
 # One-time prerequisites are in demo/README.md (an Armada cluster, and a Flyte backend whose
@@ -19,7 +19,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PY=./.venv/bin/python
-EXAMPLE="${1:-examples/python_function.py}"
+EXAMPLE="${1:-examples/function.py}"
 KIND_CLUSTER="${KIND_CLUSTER:-armada-test}"
 DEVBOX="${DEVBOX:-flyte-devbox}"
 # A non-latest tag so the driver pod (a normal backend pod) defaults to imagePullPolicy IfNotPresent

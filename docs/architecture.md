@@ -62,8 +62,7 @@ fair-share scheduling, so the node should retry rather than fail the run.
 `ArmadaConfig` exposes `gang_id`, `gang_cardinality`, and `gang_node_uniformity_label`. When a
 task sets `gang_id` and a `gang_cardinality` of two or more, the connector attaches Armada's gang
 annotations (`armadaproject.io/gangId`, `armadaproject.io/gangCardinality`) to the submission.
-Jobs sharing a gang are scheduled all-or-nothing together. Call the same `ArmadaTask` N times
-inside the DAG to submit N gang members. See `examples/pipeline.py`.
+Jobs sharing a gang are scheduled all-or-nothing together.
 
 ## Output: synthesised, or read from the pod
 
@@ -76,8 +75,7 @@ Setting `capture_result=True` makes the compute real. The connector passes each 
 pod as an upper-cased env var (input `numbers` becomes `$NUMBERS`), the workload computes a value
 and prints a line `ARMADA_RESULT:<value>`, and on success the connector reads that line back from
 the pod's logs (via binoculars) and returns it as the node's output. If no such line is found it
-falls back to the template. `examples/pipeline.py` uses this to run a distributed sum across
-a gang of workers.
+falls back to the template.
 
 ## Real Python tasks
 
@@ -96,7 +94,7 @@ How it works: Flyte renders the function into a container whose entrypoint is `a
 code bundle, reads inputs from blob storage, runs the function, writes outputs back). For these
 tasks the connector ignores the placeholder fields and instead wraps that rendered container into
 the Armada pod, adding blob-store credentials so the pod can reach storage. The function executes
-in the pod and its return value flows back as the task output. See `examples/python_function.py`.
+in the pod and its return value flows back as the task output. See `examples/function.py`.
 
 This needs two things in place:
 

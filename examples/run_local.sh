@@ -2,7 +2,7 @@
 # Run a real-Python example on Armada via local execution, in one command. Sets up the blob store
 # (a host MinIO) and the task image the pods need, then runs the example.
 #
-#   ./examples/run_local.sh                              # default: examples/python_pipeline.py
+#   ./examples/run_local.sh                              # default: examples/function.py
 #   ./examples/run_local.sh examples/python_function.py
 #   ./examples/run_local.sh examples/gang_dag.py
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PY=./.venv/bin/python
-EXAMPLE="${1:-examples/python_pipeline.py}"
+EXAMPLE="${1:-examples/function.py}"
 KIND_CLUSTER="${KIND_CLUSTER:-armada-test}"
 IMAGE=armada-flyte-task:v1
 BLOB_PORT=9100
@@ -43,4 +43,10 @@ rm -rf "${BUILD}"
 kind load docker-image "${IMAGE}" --name "${KIND_CLUSTER}" >/dev/null
 
 echo "==> 3/3  Run ${EXAMPLE} (local execution)"
+# The blob store both this process and the Armada pods use. The host LAN IP is the one address both
+# reach. The example reads these (the in-process connector at import, the client at flyte.init).
+HOST_IP="${HOST_IP:-$(ipconfig getifaddr en0 2>/dev/null || hostname -I | awk '{print $1}')}"
+export FLYTE_BLOB_ENDPOINT="http://${HOST_IP}:${BLOB_PORT}"
+export FLYTE_BLOB_ACCESS_KEY=minio
+export FLYTE_BLOB_SECRET_KEY=minio12345
 exec "${PY}" "${EXAMPLE}"
