@@ -16,6 +16,7 @@ the pod with its inputs and outputs flowing through the configured blob store.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -336,15 +337,20 @@ class ArmadaConnector(AsyncConnector):
         and let it decide, exactly as FlytePropeller does; otherwise the failure is invisible and the
         framework later mis-reports the missing output as a type error. Best-effort: a missing file
         or unreadable storage just means there is no task error to report.
+
+        The read is hard-bounded by a timeout. When the connector runs as a service (c0), Flyte's
+        global storage may not be pointed at the pods' blob store, and an unbounded read would hang
+        the poll loop and never report the job as terminal. On timeout we fall back to the
+        Armada-reported phase (and on the backend, FlytePropeller reads error.pb itself anyway).
         """
         if not output_prefix:
             return None
         try:
             from flyte._internal.runtime.io import error_path, load_error
 
-            err = await load_error(error_path(output_prefix))
+            err = await asyncio.wait_for(load_error(error_path(output_prefix)), timeout=8)
             return err.message or None
-        except Exception:  # noqa: BLE001 - never let error reporting make the failure worse
+        except Exception:  # noqa: BLE001 - timeout or any read failure: never block or worsen reporting
             return None
 
     async def get(self, resource_meta: ArmadaJobMetadata, **kwargs) -> Resource:
