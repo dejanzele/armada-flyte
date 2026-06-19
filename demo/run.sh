@@ -26,7 +26,6 @@ DEVBOX="${DEVBOX:-flyte-devbox}"
 # and uses the locally loaded image instead of trying to pull it.
 IMAGE=armada-flyte-task:v1
 HOST_IP="${HOST_IP:-$(ipconfig getifaddr en0 2>/dev/null || hostname -I | awk '{print $1}')}"
-KC="env KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
 
 echo "==> 1/3  Build the task image and load it into both clusters"
 BUILD="$(mktemp -d)"
@@ -51,12 +50,13 @@ echo "==> 2/3  Point the connector at the backend's blob store"
 if [ "${FORCE_CONNECTOR:-0}" != "1" ] && lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
   echo "    connector already running on :8000 (reusing; FORCE_CONNECTOR=1 to restart)"
 else
-  # The Armada pods (on the kind cluster) read/write the backend's bucket through its host-published
-  # NodePort, with the backend's own credentials.
-  key=$(docker exec "$DEVBOX" sh -c "$KC kubectl get secret rustfs-secret -n flyte -o jsonpath='{.data.RUSTFS_ACCESS_KEY}' | base64 -d")
-  secret=$(docker exec "$DEVBOX" sh -c "$KC kubectl get secret rustfs-secret -n flyte -o jsonpath='{.data.RUSTFS_SECRET_KEY}' | base64 -d")
-  port=$(docker exec "$DEVBOX" sh -c "$KC kubectl get svc rustfs-svc -n flyte -o jsonpath='{.spec.ports[0].nodePort}'")
-  blob="http://$HOST_IP:$port"
+  # The Armada pods (on the kind cluster) read/write the backend's RustFS bucket through its
+  # host-published NodePort. The devbox ships RustFS with fixed sandbox defaults (the same for every
+  # `flyte start devbox`: creds rustfs/rustfsstorage on NodePort 30002), so there is nothing to look
+  # up. Override these if your backend uses a different store.
+  blob="${FLYTE_BLOB_ENDPOINT:-http://$HOST_IP:30002}"
+  key="${FLYTE_BLOB_ACCESS_KEY:-rustfs}"
+  secret="${FLYTE_BLOB_SECRET_KEY:-rustfsstorage}"
   echo "    blob store: $blob"
   pkill -f "bin/c0 --port 8000" 2>/dev/null || true
   sleep 2
