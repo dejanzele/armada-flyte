@@ -37,44 +37,38 @@ Full walkthrough: [docs/getting-started.md](docs/getting-started.md).
 
 ### 3. Write a workflow
 
-Two rules:
-
-- Import `armada_flyte` before `armada_client`. This registers the connector and applies the proto shim.
-- Keep the connector tasks (which have `image=None`) in their own `TaskEnvironment`, and have the driver environment `depends_on` it.
+Write ordinary Flyte 2 tasks. Set `plugin_config=ArmadaConfig(...)` on the environment, and every
+`@env.task` in it runs its real Python body inside an Armada pod:
 
 ```python
 import flyte
-from armada_flyte import ArmadaConfig, ArmadaTask  # importing this registers the connector
+from armada_flyte import ArmadaConfig  # importing this registers the connector
 
-step = ArmadaTask(
-    name="step",
-    plugin_config=ArmadaConfig(queue="my-queue", command=["sh", "-c", "echo hi"]),
-    inputs={"x": str},
-    outputs={"result": str},
+env = flyte.TaskEnvironment(
+    name="ml",
+    image="armada-flyte-task:latest",          # an image with flyte + your deps, on the cluster
+    plugin_config=ArmadaConfig(queue="my-queue"),
 )
 
-armada_env = flyte.TaskEnvironment.from_task("armada", step)
-wf_env = flyte.TaskEnvironment("wf", depends_on=[armada_env])
-
-@wf_env.task
-async def wf(x: str = "hi") -> str:
-    return await step(x=x)
+@env.task
+async def square(x: int) -> int:
+    return x * x                                # runs in the Armada pod
 
 if __name__ == "__main__":
-    flyte.init()
-    run = flyte.with_runcontext(mode="local").run(wf, x="hi")
-    print(run.outputs()[0])
+    flyte.init(storage=...)                     # a blob store you and the pods both reach
+    print(flyte.with_runcontext(mode="local").run(square, x=7).outputs())
 ```
 
-`ArmadaConfig` controls each job: `queue`, `image`, `command`, `cpu`, `memory`, `priority`, and an
-`output_template`.
+That is the whole integration: a stock `@env.task`, plus one `plugin_config` line. Fan out with
+`asyncio.gather`, pass typed data (dataclasses, lists) between tasks, and it all runs on Armada.
 
-To build a DAG:
+This needs a shared blob store and the task image in the cluster.
+[`examples/run_python_pipeline.sh`](examples/run_python_pipeline.sh) sets both up and runs a
+multi-stage map-reduce in **one command**; see
+[docs/architecture.md](docs/architecture.md#real-python-tasks) for how it works.
 
-- Call the same `ArmadaTask` several times to fan out.
-- Give those calls a shared `gang_id` and `gang_cardinality` to schedule them as one Armada gang.
-
-The [examples](examples/) cover linear, fan-out, and gang pipelines.
+> Prefer no blob store? A lower-level `ArmadaTask` runs shell workloads directly (with optional
+> gang scheduling and a `capture_result` mode). See the [examples](examples/).
 
 ### 4. Run it
 
@@ -84,39 +78,22 @@ loop in your process, so there is no backend to stand up.
 The connector can also run as a gRPC service that a deployed Flyte backend routes to. See
 [deploy/](deploy/).
 
-## What works today, and what does not
+## What works today
 
-Each node submits a real Armada job that is genuinely scheduled, run as a pod, and polled. You get:
+The full Flyte 2 authoring experience, running on Armada:
 
-- real Flyte 2 DAG topology and data flow between nodes,
-- real Armada scheduling, including gang jobs,
-- real per-node compute, when you opt in (see below).
+- **Real Python tasks** (shown above): each `@env.task` runs its body in an Armada pod, with typed
+  inputs and outputs shipped through the blob store. Fan-out, dataclasses, and multi-stage
+  pipelines all work, since each task is a self-contained Flyte container the connector just runs.
+- **Real Armada scheduling**, including gang jobs: give tasks a shared `gang_id` and they are
+  scheduled all-or-nothing together.
+- **Two execution modes**: Flyte local execution (no backend to stand up), or as a gRPC service a
+  deployed Flyte backend routes to (see [deploy/](deploy/)).
 
-By default a node's output is synthesised from its `output_template`. This keeps the basic
-examples simple.
-
-For real compute, set `capture_result=True`. The pod then:
-
-- receives its inputs as environment variables,
-- does the work and prints `ARMADA_RESULT:<value>`,
-- has that value read back by the connector from the pod's logs.
-
-`examples/pipeline.py` uses this to run a distributed sum across a gang.
-
-You can also run **real Python functions**. Set `plugin_config=ArmadaConfig(...)` on a
-`TaskEnvironment`, and every `@env.task` in it runs its body inside an Armada pod:
-
-```python
-env = flyte.TaskEnvironment("ml", image=img, plugin_config=ArmadaConfig(queue="compute"))
-
-@env.task
-async def square(x: int) -> int:
-    return x * x      # runs in the Armada pod
-```
-
-Flyte ships the task's code and moves its inputs and outputs through a blob store that both your
-process and the Armada pods can reach. See `examples/python_function.py` and
-[docs/architecture.md](docs/architecture.md#real-python-tasks).
+Don't want to run a blob store? The lower-level `ArmadaTask` runs shell workloads directly. Its
+output is synthesised from an `output_template` by default; set `capture_result=True` to have the
+pod print `ARMADA_RESULT:<value>` and the connector read it back from the pod's logs.
+`examples/pipeline.py` runs a distributed sum this way.
 
 ## Documentation
 
