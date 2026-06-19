@@ -70,5 +70,21 @@ else
   echo "    connector ready (log: /tmp/armada-flyte-c0.log)"
 fi
 
+# The devbox's baked connector endpoint is host.docker.internal, which resolves inside the devbox
+# pods only on Docker Desktop. On Linux, point the connector at this host's LAN IP so the pods can
+# reach c0. Idempotent: it patches and restarts the backend only when the endpoint is not already set.
+if [ "$(uname -s)" = "Linux" ]; then
+  KC="env KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl"
+  if ! docker exec "$DEVBOX" sh -c "$KC get cm flyte-binary-config -n flyte -o yaml" 2>/dev/null | grep -q "endpoint: $HOST_IP:8000"; then
+    echo "    linux: pointing the connector at $HOST_IP:8000 and restarting the backend"
+    tmp="$(mktemp)"
+    printf 'plugins:\n  connector-service:\n    defaultConnector:\n      endpoint: %s:8000\n      insecure: true\n    supportedTaskTypes:\n    - armada\n' "$HOST_IP" > "$tmp"
+    python3 -c "import json,sys;print(json.dumps({'data':{'201-armada-endpoint.yaml':open(sys.argv[1]).read()}}))" "$tmp" > "$tmp.json"
+    docker cp "$tmp.json" "$DEVBOX:/tmp/af-endpoint.json" >/dev/null
+    docker exec "$DEVBOX" sh -c "$KC patch configmap flyte-binary-config -n flyte --type merge --patch-file /tmp/af-endpoint.json >/dev/null && $KC rollout restart deploy/flyte-binary -n flyte >/dev/null && $KC rollout status deploy/flyte-binary -n flyte --timeout=150s >/dev/null"
+    rm -f "$tmp" "$tmp.json"
+  fi
+fi
+
 echo "==> 3/3  Run $EXAMPLE through the backend"
 exec "$PY" "$EXAMPLE"

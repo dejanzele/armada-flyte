@@ -46,23 +46,14 @@ Docker (with buildx), Helm, Kustomize, and Go on your PATH:
 git clone -b armada-devbox https://github.com/dejanzele/flyte.git
 cd flyte
 make devbox-build    # one-time: builds the devbox image with the connector plugin and routing (a heavy build)
+make devbox-run      # starts the devbox; the Flyte UI comes up on http://localhost:30080
 ```
 
-Both clusters expose their Kubernetes API on host port 6443, and the Armada cluster (step 1) already
-took it. The devbox does not need its host API port for this setup (inspect it with
-`docker exec flyte-devbox kubectl ...` instead), so start it without publishing 6443:
-
-```
-docker run -d --rm --privileged --name flyte-devbox \
-  --add-host host.docker.internal:host-gateway --env FLYTE_DEV=False \
-  --volume flyte-devbox:/var/lib/flyte/storage \
-  -p 30000:30000 -p 30001:5432 -p 30002:30002 -p 30080:30080 -p 30081:30081 \
-  flyte-devbox:latest
-```
-
-`make devbox-run` does the same but also publishes 6443, which collides with the Armada cluster. The
-Flyte UI comes up on `http://localhost:30080`; once it answers, continue. Stop the devbox later with
-`docker rm -f flyte-devbox`. [../demo/](../demo/) describes what the run script expects from it.
+On this branch the devbox does not publish its Kubernetes API port, so it coexists with the Armada
+cluster (which uses host port 6443). Inspect the devbox cluster with `docker exec flyte-devbox
+kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml ...`. Once `http://localhost:30080` answers, continue.
+Stop the devbox later with `docker rm -f flyte-devbox`. [../demo/](../demo/) describes what the run
+script expects from it.
 
 ## 3. Install this package
 
