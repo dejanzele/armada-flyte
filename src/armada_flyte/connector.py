@@ -151,17 +151,17 @@ class ArmadaConnector(AsyncConnector):
         return _pod_spec(container)
 
     def _storage_env(self) -> list:
-        """Env vars so a function-task pod can reach the blob store (S3/MinIO over plain HTTP)."""
+        """Stamp the platform storage config onto the pod using Flyte's own FLYTE_AWS_* convention,
+        exactly as FlytePropeller does for in-cluster task pods. The a0 runtime reads these via
+        flyte.storage.S3.auto(). This is a self-hosted S3 store (MinIO/RustFS), not AWS cloud: the
+        endpoint differs from the backend's because the Armada pod is on another cluster, but the
+        credentials are the platform's. obstore allows plain HTTP by default, so no extra flags."""
         if not self._blob_endpoint:
             return []
         return [
-            core_v1.EnvVar(name="AWS_ACCESS_KEY_ID", value=self._blob_key),
-            core_v1.EnvVar(name="AWS_SECRET_ACCESS_KEY", value=self._blob_secret),
-            core_v1.EnvVar(name="AWS_DEFAULT_REGION", value=self._blob_region),
-            core_v1.EnvVar(name="AWS_REGION", value=self._blob_region),
-            core_v1.EnvVar(name="AWS_ENDPOINT_URL", value=self._blob_endpoint),
-            core_v1.EnvVar(name="AWS_ENDPOINT_URL_S3", value=self._blob_endpoint),
-            core_v1.EnvVar(name="AWS_ALLOW_HTTP", value="true"),
+            core_v1.EnvVar(name="FLYTE_AWS_ENDPOINT", value=self._blob_endpoint),
+            core_v1.EnvVar(name="FLYTE_AWS_ACCESS_KEY_ID", value=self._blob_key),
+            core_v1.EnvVar(name="FLYTE_AWS_SECRET_ACCESS_KEY", value=self._blob_secret),
         ]
 
     @staticmethod
