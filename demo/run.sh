@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Showcase: run a Python @env.task on Armada THROUGH a Flyte 2 backend, in one command.
+# Run a Python @env.task on Armada through a Flyte 2 backend, in one command (the default path).
 # The task is registered with FlyteAdmin, runs as an Armada-scheduled pod, and shows up in the
 # Flyte UI with its result.
 #
@@ -9,7 +9,7 @@
 #   - starts the connector service pointed at that store,
 #   - runs the example and prints the result.
 #
-# Run a different example by passing it as an argument (default: examples/function.py):
+# Run a different example by passing it as an argument (default: examples/hello.py):
 #   ./demo/run.sh examples/ml_pipeline.py
 #
 # One-time prerequisites are in demo/README.md (an Armada cluster, and a Flyte backend whose
@@ -19,7 +19,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PY=./.venv/bin/python
-EXAMPLE="${1:-examples/function.py}"
+EXAMPLE="${1:-examples/hello.py}"
 KIND_CLUSTER="${KIND_CLUSTER:-armada-test}"
 DEVBOX="${DEVBOX:-flyte-devbox}"
 # A non-latest tag so the driver pod (a normal backend pod) defaults to imagePullPolicy IfNotPresent

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Run an example on Armada (a Python @env.task) via local execution, in one command. Sets up the blob store
-# (a host MinIO) and the task image the pods need, then runs the example.
+# Run an example locally (in-process) for fast iteration. For the default backend path that shows
+# the run in the Flyte UI, use ./demo/run.sh instead. Sets up the blob store (a host MinIO) and the
+# task image the pods need, then runs the example.
 #
-#   ./examples/run_local.sh                              # default: examples/function.py
+#   ./examples/run_local.sh                              # default: examples/hello.py
 #   ./examples/run_local.sh examples/fanout.py
 #   ./examples/run_local.sh examples/ml_pipeline.py
 #
@@ -12,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PY=./.venv/bin/python
-EXAMPLE="${1:-examples/function.py}"
+EXAMPLE="${1:-examples/hello.py}"
 KIND_CLUSTER="${KIND_CLUSTER:-armada-test}"
 IMAGE=armada-flyte-task:v1
 BLOB_PORT=9100

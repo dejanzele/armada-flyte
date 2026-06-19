@@ -8,8 +8,8 @@ The cross-validation jobs are INDEPENDENT (no gang): alphas x k parallel Armada 
 (a closed-form 1-D ridge) so it runs with no image changes; swap in numpy/scikit-learn for real
 models by adding them to the task image. Run:
 
-    ./examples/run_local.sh examples/ml_pipeline.py    # local
-    ./demo/run.sh examples/ml_pipeline.py              # through the Flyte UI
+    ./demo/run.sh examples/ml_pipeline.py              # default: runs on Armada, shows in the Flyte UI
+    ./examples/run_local.sh examples/ml_pipeline.py    # also available: a local run for fast iteration
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import flyte
 from armada_flyte import ArmadaConfig
 
 IMAGE = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:v1")
-BACKEND = bool(os.environ.get("BACKEND"))
 
 work = flyte.TaskEnvironment(
     name="ml",
@@ -31,10 +30,9 @@ work = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu="500m", memory="512Mi"),
     plugin_config=ArmadaConfig(queue="flyte"),
 )
-_driver_kwargs = {"depends_on": [work]}
-if BACKEND:
-    _driver_kwargs["image"] = IMAGE
-driver = flyte.TaskEnvironment(name="driver", **_driver_kwargs)
+# The driver orchestrates the pipeline. On a backend it runs as a pod, so it needs the same task
+# image; locally it runs in-process and the image is unused. Setting it always is safe.
+driver = flyte.TaskEnvironment(name="driver", image=IMAGE, depends_on=[work])
 
 
 @dataclass

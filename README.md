@@ -21,8 +21,8 @@ env = flyte.TaskEnvironment(
 )
 
 @env.task
-async def square(x: int) -> int:
-    return x * x                              # runs in an Armada-scheduled pod
+async def greet(name: str) -> str:
+    return f"hello {name}, from an Armada pod"   # runs in an Armada-scheduled pod
 ```
 
 A stock `@env.task` and one `plugin_config` line. Fan out with `asyncio.gather`, pass dataclasses
@@ -41,17 +41,19 @@ never lands in the control plane. See [docs/getting-started.md](docs/getting-sta
 
 ## See it run
 
-One command wires everything up, runs the task through a Flyte backend, and prints the result:
+With a local Armada cluster and a Flyte backend up (a one-time setup, see
+[getting started](docs/getting-started.md)), one command builds the task image, wires the blob
+store, and submits the task through the backend:
 
 ```console
-$ ./demo/run.sh examples/function.py
+$ ./demo/run.sh examples/hello.py
 submitted run rf6zwrmnpzpwdgnfzffn
   UI: http://localhost:30080/v2/.../runs/rf6zwrmnpzpwdgnfzffn
-call price = 10.4506  (computed in an Armada pod, routed there by Flyte)
+hello armada, from an Armada pod
 ```
 
-The run shows up in the Flyte UI, scheduled and executed by Armada. See [demo/](demo/) for the
-one-time prerequisites and what the script does.
+The run shows up in the Flyte UI, scheduled and executed by Armada. See [demo/](demo/) for what the
+script does, and [getting started](docs/getting-started.md) for the one-time setup.
 
 ## Why both
 
@@ -74,17 +76,29 @@ flowchart LR
 ```
 
 Flyte renders each task into a self-contained container; the connector wraps it into an Armada
-job, submits it, and polls to completion. The same connector runs two ways: in your process for
-local runs, or as a service a deployed Flyte backend routes to.
+job, submits it, and polls to completion. By default the connector runs as a service a deployed
+Flyte backend routes to, so every run lands in the Flyte UI. The same connector can also run in
+your own process for quick local iteration.
 
 ## Next steps
 
-- **[Run it locally, end to end](docs/getting-started.md)** - stand up Armada and run an example.
-- **[Run it on a backend](demo/)** - the one-command showcase, in the Flyte UI.
-- **[How it works](docs/architecture.md)** - the connector, state mapping, gang scheduling, real
-  Python tasks, and current limits.
-- **[Gotchas](docs/gotchas.md)** - the non-obvious environment and proto issues.
-- **[Deploy the connector](deploy/)** - run it as a gRPC service or deploy it to a Flyte backend.
+Go from zero to a job in the Flyte UI:
+
+1. **Stand up Armada and a Flyte backend.** A local Kind cluster plus a Flyte 2 devbox is all you
+   need. [Getting started](docs/getting-started.md) walks the one-time setup.
+2. **Write your first task.** A stock `@env.task` and one `plugin_config=ArmadaConfig(queue=...)`
+   line. Start from [examples/hello.py](examples/hello.py), then browse [examples/](examples/) for
+   fan-out, a full ML pipeline, and gang scheduling.
+3. **Submit it to the backend.** `./demo/run.sh examples/hello.py` builds the task image, wires the
+   blob store, and registers the task with Flyte. See [demo/](demo/) for what each step does.
+4. **Watch it run in the Flyte UI.** The command prints a UI link. Open it to follow the run as
+   Armada schedules the pod, executes it, and records the typed result.
+5. **Go further.** Understand the internals in [How it works](docs/architecture.md) (the connector,
+   state mapping, gang scheduling). Deploy the connector as a service for hands-off routing in
+   [deploy/](deploy/). Hit something odd? [Gotchas](docs/gotchas.md) lists the non-obvious traps.
+
+Prefer a tight inner loop first? You can also run any example locally, in-process and without a
+backend, for fast iteration: `./examples/run_local.sh examples/hello.py`.
 
 ## License
 

@@ -4,26 +4,34 @@ Write ordinary Flyte 2 Python. Each `@env.task` runs in an Armada-scheduled pod.
 Armada-specific line is `plugin_config=ArmadaConfig(queue=...)`; everything else (resources,
 chaining, fan-out, typed data) is stock Flyte.
 
-Three examples, in order:
+Five examples, in order:
 
 | File | Shows | Expected output |
 | --- | --- | --- |
-| [`function.py`](function.py) | **Simple.** One task: a Black-Scholes option price. | `call price = 10.4506` |
+| [`hello.py`](hello.py) | **Hello world.** One task, returns a greeting string. | `hello armada, from an Armada pod` |
+| [`function.py`](function.py) | **Simple.** One task that does real work: a Black-Scholes option price. | `call price = 10.4506` |
 | [`fanout.py`](fanout.py) | **Parallel.** A typed dataclass through a fan-out / fan-in (independent jobs via `asyncio.gather`). | `Stats(...)  mean = 506.47` |
-| [`ml_pipeline.py`](ml_pipeline.py) | **Complex.** An end-to-end ML run: make data, k-fold cross-validation in parallel, pick the best model, evaluate. | `best alpha = 1.0  fit y ~ 3.00 x + 2.00` |
+| [`ml_pipeline.py`](ml_pipeline.py) | **Complex.** End-to-end ML: make data, k-fold cross-validation in parallel, pick the best model, evaluate. | `best alpha = 1.0  fit y ~ 3.00 x + 2.00` |
+| [`gang.py`](gang.py) | **Armada gangs.** N co-dependent workers, scheduled all-or-nothing (the one feature plain k8s cannot give you). | `global average = ...` |
 
 ## Run one
 
-Two one-command runners do all the infra (build the task image, wire the blob store):
+The runner builds the task image, wires the blob store, and submits the example through the Flyte
+backend (the default - the run shows up in the Flyte UI):
 
 ```bash
-./examples/run_local.sh examples/function.py     # local execution, prints the result
-./demo/run.sh           examples/function.py     # through a Flyte backend, shows in the Flyte UI
+./demo/run.sh examples/hello.py
 ```
 
-Pass any example as the argument. Prerequisite: a running Armada cluster (see
-[../docs/getting-started.md](../docs/getting-started.md)); the backend path additionally needs a
-Flyte 2 backend (see [../demo/](../demo/)).
+Pass any example as the argument. Prerequisite: a running Armada cluster and a Flyte 2 backend (see
+[../docs/getting-started.md](../docs/getting-started.md)).
+
+You can also run an example locally for fast iteration (no Flyte backend needed); it runs the task
+in-process and prints the result in your terminal:
+
+```bash
+./examples/run_local.sh examples/hello.py
+```
 
 ## What you write
 
@@ -32,15 +40,15 @@ import flyte
 from armada_flyte import ArmadaConfig
 
 env = flyte.TaskEnvironment(
-    name="quant",
+    name="hello",
     image="armada-flyte-task:v1",
     resources=flyte.Resources(cpu=1, memory="512Mi"),   # required; declared the stock-Flyte way
     plugin_config=ArmadaConfig(queue="flyte"),           # the one Armada-specific line
 )
 
 @env.task
-async def price(spot: float, strike: float) -> float:
-    ...
+async def greet(name: str) -> str:
+    return f"hello {name}, from an Armada pod"
 ```
 
 Resources are required (Armada rejects a job without them). Declare them with `flyte.Resources`

@@ -20,11 +20,12 @@ task template's `custom` field, and the connector reads it back in `create` to b
 
 ## Execution model
 
-In local execution, Flyte's `AsyncConnectorExecutorMixin` drives the loop in-process: it calls
-`create` once, then polls `get` every 3 seconds until the task reaches a terminal phase
-(`SUCCEEDED`, `FAILED`, or `ABORTED`). The connector itself holds no state between calls. The
-job handle it needs (`job_id`, `job_set_id`, `queue`) lives
-in `ArmadaJobMetadata`, which Flyte persists between `create` and `get`/`delete`.
+By default a deployed Flyte backend (FlytePropeller) calls the connector over gRPC and the run
+appears in the Flyte UI. Either way, the same loop runs: `create` once, then poll `get` every 3
+seconds until the task reaches a terminal phase (`SUCCEEDED`, `FAILED`, or `ABORTED`). In local
+execution, Flyte's `AsyncConnectorExecutorMixin` drives that loop in-process instead of a backend.
+The connector itself holds no state between calls. The job handle it needs (`job_id`, `job_set_id`,
+`queue`) lives in `ArmadaJobMetadata`, which Flyte persists between `create` and `get`/`delete`.
 
 ```mermaid
 flowchart TD
@@ -73,8 +74,8 @@ A normal `@env.task` function can run its body inside an Armada pod. Register `A
 env = flyte.TaskEnvironment("ml", image=img, plugin_config=ArmadaConfig(queue="compute"))
 
 @env.task
-async def square(x: int) -> int:
-    return x * x
+async def greet(name: str) -> str:
+    return f"hello {name}, from an Armada pod"
 ```
 
 How it works: Flyte renders the function into a container whose entrypoint is `a0` (it loads the
@@ -96,11 +97,12 @@ This needs two things in place:
 
 The connector runs in two ways with the same code:
 
-- **Local execution** (`mode="local"`), where `AsyncConnectorExecutorMixin` drives the
-  create/poll loop in your process. This is what the examples use.
-- **As a gRPC service**, where a deployed Flyte backend (FlytePropeller) calls `CreateTask` and
-  `GetTask` on the connector over gRPC. Run it with `c0 --modules armada_flyte.connector` or
-  deploy it as a `ConnectorEnvironment`. See [../deploy/](../deploy/).
+- **As a gRPC service** (the default), where a deployed Flyte backend (FlytePropeller) calls
+  `CreateTask` and `GetTask` on the connector over gRPC and runs appear in the Flyte UI. Run it with
+  `c0 --modules armada_flyte.connector` or deploy it as a `ConnectorEnvironment`. See
+  [../deploy/](../deploy/).
+- **Local execution** (`mode="local"`), where `AsyncConnectorExecutorMixin` drives the create/poll
+  loop in your process. Useful for fast local iteration on task logic, without a backend.
 
 ## Limitations and next steps
 

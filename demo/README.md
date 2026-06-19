@@ -6,7 +6,7 @@ with FlyteAdmin, scheduled by Armada as a pod, and shows up in the Flyte UI with
 ```
 submitted run rf6zwrmnpzpwdgnfzffn
   UI: http://localhost:30080/v2/.../runs/rf6zwrmnpzpwdgnfzffn
-call price = 10.4506  (computed in an Armada pod, routed there by Flyte)
+hello armada, from an Armada pod
 ```
 
 ## What you write

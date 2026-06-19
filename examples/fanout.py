@@ -9,8 +9,8 @@ The shards are INDEPENDENT jobs: Armada schedules each as capacity frees up, whi
 primitive for embarrassingly-parallel work (a parameter sweep, Monte-Carlo paths, batch scoring).
 A typed dataclass (Stats) flows between the stages. Run:
 
-    ./examples/run_local.sh examples/fanout.py       # local
-    ./demo/run.sh examples/fanout.py                 # through the Flyte UI
+    ./demo/run.sh examples/fanout.py                 # default: runs on Armada, shows in the Flyte UI
+    ./examples/run_local.sh examples/fanout.py       # also available: a local run for fast iteration
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import flyte
 from armada_flyte import ArmadaConfig
 
 IMAGE = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:v1")
-BACKEND = bool(os.environ.get("BACKEND"))
 
 work = flyte.TaskEnvironment(
     name="stats",
@@ -31,11 +30,9 @@ work = flyte.TaskEnvironment(
     resources=flyte.Resources(cpu=1, memory="512Mi"),
     plugin_config=ArmadaConfig(queue="flyte"),
 )
-# The driver orchestrates: locally it runs in-process; on a backend it runs as a pod (needs an image).
-_driver_kwargs = {"depends_on": [work]}
-if BACKEND:
-    _driver_kwargs["image"] = IMAGE
-driver = flyte.TaskEnvironment(name="driver", **_driver_kwargs)
+# The driver orchestrates the fan-out / fan-in. On a backend it runs as a pod, so it needs the same
+# task image; locally it runs in-process and the image is unused. Setting it always is safe.
+driver = flyte.TaskEnvironment(name="driver", image=IMAGE, depends_on=[work])
 
 
 @dataclass

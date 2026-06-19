@@ -1,8 +1,9 @@
 # Running the connector as a service
 
-By default the examples use Flyte local execution, which runs the connector in your own process.
-A connector can also run as a long-running gRPC service that a deployed Flyte backend
-(FlytePropeller) routes `armada` tasks to. This is the same connector code, hosted differently.
+The examples default to running on a Flyte backend: the connector runs there as a long-running
+gRPC service that FlytePropeller routes `armada` tasks to. (The same connector code can also run in
+your own process for fast local iteration; see [getting started](../docs/getting-started.md).) This
+page is about running it as that service.
 
 ## Run the service locally
 
@@ -36,7 +37,7 @@ A deployed Flyte backend is the one prerequisite this repo does not stand up for
 
 ## Python function tasks through the backend
 
-`examples/function.py --backend` registers a real `@env.task` with the backend and runs it
+`examples/function.py --backend` registers an `@env.task` with the backend and runs it
 on Armada, so it appears in the Flyte UI with its true output (the one-command `./demo/run.sh`
 wraps this). Two things matter here that local execution hides:
 
