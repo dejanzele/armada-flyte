@@ -38,7 +38,7 @@ to Armada, so the pods land on the Armada cluster. The two clusters talk through
 
 Stock Flyte 2 does not register the Armada connector plugin (the patch is
 [dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1), upstreaming in progress), so build the
-devbox from that branch:
+devbox from that branch. The build needs Docker (with buildx), Helm, Kustomize, and Go on your PATH:
 
 ```
 git clone -b armada https://github.com/dejanzele/flyte.git
