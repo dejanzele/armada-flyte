@@ -26,7 +26,7 @@ from armada_flyte import ArmadaConfig
 
 env = flyte.TaskEnvironment(
     name="ml",
-    image="armada-flyte-task:latest",
+    image="armada-flyte-task:v1",
     plugin_config=ArmadaConfig(queue="flyte", cpu="500m", memory="512Mi"),
 )
 

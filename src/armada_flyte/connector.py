@@ -165,6 +165,14 @@ class ArmadaConnector(AsyncConnector):
         ]
 
     @staticmethod
+    def _run_name(meta) -> str:
+        """The Flyte run name (shared by every action in a run), or "" if unavailable."""
+        try:
+            return meta.task_execution_id.node_execution_id.execution_id.name
+        except AttributeError:
+            return ""
+
+    @staticmethod
     def _runtime_args(args: list, output_prefix: str, meta) -> list:
         """Fill in the runtime arguments the backend leaves for the executor to substitute.
 
@@ -256,6 +264,11 @@ class ArmadaConnector(AsyncConnector):
         else:
             # Placeholder task (ArmadaTask): build the pod from ArmadaConfig.
             pod = self._build_pod_spec(cfg, inputs)
+        # Scope the gang_id to this run so each run forms its own gang (and concurrent runs do not
+        # collide), while every gang member in the run still shares the same id.
+        run_name = self._run_name(task_execution_metadata)
+        if run_name and cfg.get("gang_id"):
+            cfg["gang_id"] = f"{cfg['gang_id']}-{run_name}"
         annotations = _gang_annotations(cfg)
         item = self.client.create_job_request_item(
             priority=float(cfg.get("priority", 1)),

@@ -41,6 +41,12 @@ def test_runtime_args_noop_when_already_complete():
     assert ArmadaConnector._runtime_args(list(args), "", None) == args
 
 
+def test_run_name_extraction():
+    # The run name (shared by every action in a run) scopes the gang id so runs do not collide.
+    assert ArmadaConnector._run_name(_backend_meta()) == "run123"
+    assert ArmadaConnector._run_name(None) == ""
+
+
 def test_plugin_config_builds_a_function_task():
     env = flyte.TaskEnvironment("e", plugin_config=ArmadaConfig(queue="q"))
 

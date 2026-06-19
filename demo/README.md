@@ -34,6 +34,13 @@ flyte.run(square, x=7)
 The script builds the task image, loads it into the Armada cluster, points the connector at the
 backend's blob store, and runs the task. It prints the UI link and the result.
 
+Run a different example by passing it, for example the gang DAG (`generate`, a gang of 3 workers,
+`aggregate`), which runs end to end through the backend:
+
+```bash
+./demo/run.sh examples/backend_gang.py
+```
+
 ## One-time prerequisites
 
 The script does the wiring; it assumes two things are already running:

@@ -9,6 +9,9 @@
 #   - starts the connector service pointed at that store,
 #   - runs the example and prints the result.
 #
+# Run a different example by passing it as an argument (default: examples/backend_run.py):
+#   ./demo/run.sh examples/backend_gang.py
+#
 # One-time prerequisites are in demo/README.md (an Armada cluster, and a Flyte backend whose
 # executor routes `armada` tasks to the connector). Override defaults with env vars if needed:
 #   KIND_CLUSTER (default armada-test), DEVBOX (default flyte-devbox), HOST_IP (auto-detected).
@@ -16,13 +19,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PY=./.venv/bin/python
+EXAMPLE="${1:-examples/backend_run.py}"
 KIND_CLUSTER="${KIND_CLUSTER:-armada-test}"
 DEVBOX="${DEVBOX:-flyte-devbox}"
-IMAGE=armada-flyte-task:latest
+# A non-latest tag so the driver pod (a normal backend pod) defaults to imagePullPolicy IfNotPresent
+# and uses the locally loaded image instead of trying to pull it.
+IMAGE=armada-flyte-task:v1
 HOST_IP="${HOST_IP:-$(ipconfig getifaddr en0 2>/dev/null || hostname -I | awk '{print $1}')}"
 KC="env KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
 
-echo "==> 1/3  Build the task image and load it into the Armada cluster ($KIND_CLUSTER)"
+echo "==> 1/3  Build the task image and load it into both clusters"
 BUILD="$(mktemp -d)"
 mkdir -p "$BUILD/pkg"
 cp -R pyproject.toml src "$BUILD/pkg/"
@@ -35,6 +41,8 @@ EOF
 docker build -t "$IMAGE" "$BUILD" >/dev/null
 rm -rf "$BUILD"
 kind load docker-image "$IMAGE" --name "$KIND_CLUSTER" >/dev/null
+# Import into the backend cluster too, so a multi-stage DAG's driver task can run there.
+docker save "$IMAGE" | docker exec -i "$DEVBOX" ctr -n k8s.io images import - >/dev/null
 
 echo "==> 2/3  Point the connector at the backend's blob store"
 # The Armada pods (on the kind cluster) read/write the backend's bucket through its host-published
@@ -56,5 +64,5 @@ for _ in $(seq 1 15); do
 done
 echo "    connector ready (log: /tmp/armada-flyte-c0.log)"
 
-echo "==> 3/3  Run a real @env.task through the backend"
-exec "$PY" examples/backend_run.py
+echo "==> 3/3  Run $EXAMPLE through the backend"
+exec "$PY" "$EXAMPLE"

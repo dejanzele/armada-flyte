@@ -27,6 +27,8 @@ override with `$ARMADA_QUEUE`) is created automatically if it does not already e
 | `python_function.py` | A real Python `@env.task` (`square(x)`) whose body runs inside an Armada pod, with inputs/outputs through a blob store. Needs a MinIO reachable from the host and the cluster, and a task image loaded into the cluster (see the file header and docs/architecture.md). Prints `49`. | 1           |
 | `python_pipeline.py` | A real multi-stage map-reduce: `generate` then 4 parallel `shard_stats` then `merge`, each stage's actual Python running in an Armada pod with typed data (a `Stats` dataclass) flowing between them. Run it with one command via `run_python_pipeline.sh`. | 6           |
 | `gang_dag.py`        | The real-Python version of `gang_pipeline.py`: `generate` then a 3-worker GANG (`partial_sum`) then `total`. The three workers run actual Python and are scheduled as one Armada gang (shared `gang_id`, cardinality 3). Prints `total = 4789`. | 5           |
+| `backend_run.py`     | A real `@env.task` (`square`) run through a deployed Flyte backend (`flyte.run`), so it appears in the Flyte UI. Use `./demo/run.sh`, which wires it up. Prints `square(7) = 49`. | 1 |
+| `backend_gang.py`    | The gang DAG (`gang_dag.py`) run through the backend, so the whole thing shows in the Flyte UI. The driver runs in the backend cluster; the workers form an Armada gang. Use `./demo/run.sh examples/backend_gang.py`. Prints `total = 4789`. | 5 + driver |
 
 ## Running
 
