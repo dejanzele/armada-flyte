@@ -36,14 +36,16 @@ kind cluster (step 1). The Flyte backend runs in its own k3d cluster, a "devbox"
 control plane, the UI, and a blob store. It routes `armada` tasks to the connector, which submits them
 to Armada, so the pods land on the Armada cluster. The two clusters talk through the connector service.
 
-Stock Flyte 2 does not register the Armada connector plugin (the patch is
-[dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1), upstreaming in progress), so build the
-devbox from that branch. The build needs Docker (with buildx), Helm, Kustomize, and Go on your PATH:
+Stock Flyte 2 neither registers the Armada connector plugin nor routes `armada` tasks to it. The
+`armada-devbox` branch adds both: the connector plugin (which is
+[dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1), upstreaming in progress) plus the
+devbox config that routes `armada` tasks to the connector. Build the devbox from it. The build needs
+Docker (with buildx), Helm, Kustomize, and Go on your PATH:
 
 ```
-git clone -b armada https://github.com/dejanzele/flyte.git
+git clone -b armada-devbox https://github.com/dejanzele/flyte.git
 cd flyte
-make devbox-build    # one-time: builds the devbox image including the connector plugin (a heavy build)
+make devbox-build    # one-time: builds the devbox image with the connector plugin and routing (a heavy build)
 ```
 
 Both clusters expose their Kubernetes API on host port 6443, and the Armada cluster (step 1) already

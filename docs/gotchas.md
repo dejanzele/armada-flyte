@@ -33,3 +33,14 @@ Use a native arm64 interpreter, such as Homebrew's `python3.11`.
 `armada_client`'s Kubernetes protos keep the original field names, so it is `restartPolicy` and
 `terminationGracePeriodSeconds`, not the snake_case you might expect from generated Python
 protos.
+
+## Task pod fails with a 404 on its code bundle after recreating the devbox
+
+If you recreate the devbox with a fresh storage volume (a clean blob store) but keep your client-side
+bundle cache, `flyte.run` logs `Code bundle found in cache, skipping upload` and the task pod then
+fails fetching `.../fast<hash>.tar.gz` with a 404. The client cached the upload against the old store
+and skips re-uploading it to the new one. Clear the cache and rerun:
+
+```
+rm -f ~/.flyte/local-cache/cache.db
+```

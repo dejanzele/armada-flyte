@@ -44,8 +44,8 @@ The script does the wiring; it assumes two things are already running:
    ```
 
 2. **A Flyte 2 backend** in its own cluster, separate from Armada's, whose executor registers the
-   Armada connector plugin. Build and run it from
-   [dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1).
+   Armada connector plugin and routes `armada` tasks to it. Build and run it from the `armada-devbox`
+   branch of [dejanzele/flyte](https://github.com/dejanzele/flyte).
    [../docs/getting-started.md](../docs/getting-started.md) step 2 has the build and how to avoid the
    port 6443 clash with the Armada cluster.
 
