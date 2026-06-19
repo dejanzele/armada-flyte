@@ -121,12 +121,11 @@ class ArmadaConnector(AsyncConnector):
     def __init__(self, armada_url: Optional[str] = None, binoculars_url: Optional[str] = None):
         self._url = armada_url or os.environ.get("ARMADA_URL", "localhost:50051")
         self._binoculars_url = binoculars_url or os.environ.get("BINOCULARS_URL", "localhost:50053")
-        # Blob store the Armada pods use for function-task inputs/outputs (must match the store
-        # the Flyte client uploaded to). Empty endpoint means placeholder tasks only.
+        # Storage config the Armada pods get (as FLYTE_AWS_*), pointing at the same store the Flyte
+        # client uploaded to. Empty endpoint means placeholder tasks only (no blob store needed).
         self._blob_endpoint = os.environ.get("FLYTE_BLOB_ENDPOINT", "")
         self._blob_key = os.environ.get("FLYTE_BLOB_ACCESS_KEY", "")
         self._blob_secret = os.environ.get("FLYTE_BLOB_SECRET_KEY", "")
-        self._blob_region = os.environ.get("FLYTE_BLOB_REGION", "us-east-1")
         self._client: Optional[ArmadaClient] = None
 
     @property
