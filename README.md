@@ -15,13 +15,14 @@ from armada_flyte import ArmadaConfig
 
 env = flyte.TaskEnvironment(
     "ml",
-    image="armada-flyte-task:latest",
+    image="armada-flyte-task:v1",
+    resources=flyte.Resources(cpu=1, memory="512Mi"),
     plugin_config=ArmadaConfig(queue="ml"),   # this line routes the task to Armada
 )
 
 @env.task
 async def square(x: int) -> int:
-    return x * x                              # real Python, runs in an Armada-scheduled pod
+    return x * x                              # runs in an Armada-scheduled pod
 ```
 
 A stock `@env.task` and one `plugin_config` line. Fan out with `asyncio.gather`, pass dataclasses
@@ -29,13 +30,13 @@ between tasks, gang-schedule a group: it is all just Flyte, running on Armada.
 
 ## See it run
 
-One command wires everything up, runs the task on a real Flyte backend, and prints the result:
+One command wires everything up, runs the task through a Flyte backend, and prints the result:
 
 ```console
-$ ./demo/run.sh
+$ ./demo/run.sh examples/function.py
 submitted run rf6zwrmnpzpwdgnfzffn
   UI: http://localhost:30080/v2/.../runs/rf6zwrmnpzpwdgnfzffn
-square(7) = 49  (real Python, computed in an Armada pod, via the Flyte backend)
+call price = 10.4506  (computed in an Armada pod, routed there by Flyte)
 ```
 
 The run shows up in the Flyte UI, scheduled and executed by Armada. See [demo/](demo/) for the

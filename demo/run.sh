@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Showcase: run a real Python @env.task on Armada THROUGH a Flyte 2 backend, in one command.
+# Showcase: run a Python @env.task on Armada THROUGH a Flyte 2 backend, in one command.
 # The task is registered with FlyteAdmin, runs as an Armada-scheduled pod, and shows up in the
-# Flyte UI with its real result.
+# Flyte UI with its result.
 #
 # This script does the fiddly wiring for you:
 #   - builds the task image and loads it into the Armada (kind) cluster,

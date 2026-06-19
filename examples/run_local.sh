@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a real-Python example on Armada via local execution, in one command. Sets up the blob store
+# Run an example on Armada (a Python @env.task) via local execution, in one command. Sets up the blob store
 # (a host MinIO) and the task image the pods need, then runs the example.
 #
 #   ./examples/run_local.sh                              # default: examples/function.py

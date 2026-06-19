@@ -1,13 +1,12 @@
-# Demo: real Python on Armada, through the Flyte backend
+# Demo: a Python function on Armada, through the Flyte backend
 
-`./demo/run.sh` runs an ordinary Flyte 2 task on Armada via a real Flyte backend. The task is
-registered with FlyteAdmin, scheduled by Armada as a pod, and shows up in the Flyte UI with its
-real result:
+`./demo/run.sh` runs an ordinary Flyte 2 task on Armada via a Flyte backend. The task is registered
+with FlyteAdmin, scheduled by Armada as a pod, and shows up in the Flyte UI with its result:
 
 ```
 submitted run rf6zwrmnpzpwdgnfzffn
   UI: http://localhost:30080/v2/.../runs/rf6zwrmnpzpwdgnfzffn
-square(7) = 49  (real Python, computed in an Armada pod, via the Flyte backend)
+call price = 10.4506  (computed in an Armada pod, routed there by Flyte)
 ```
 
 ## What you write
@@ -59,7 +58,7 @@ The two things backend execution needs beyond local execution, both handled for 
   credentials and passes them to the connector.
 - **Runtime arguments.** For a backend run FlytePropeller normally fills the task's runtime args
   (`--run-base-dir`, org/project/domain, run and action names). The connector fills them from the
-  task execution metadata, so the function runs and its real typed output is recorded.
+  task execution metadata, so the function runs and its typed output is recorded.
 
-See [../docs/architecture.md](../docs/architecture.md#real-python-tasks) and
+See [../docs/architecture.md](../docs/architecture.md#python-function-tasks) and
 [../deploy/README.md](../deploy/README.md) for the full picture.

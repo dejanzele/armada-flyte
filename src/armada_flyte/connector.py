@@ -281,7 +281,7 @@ class ArmadaConnector(AsyncConnector):
         states = self.client.get_job_status([resource_meta.job_id]).job_states
         state = states.get(resource_meta.job_id, submit_pb2.UNKNOWN)
         phase = _ARMADA_STATE_TO_PHASE.get(state, TaskExecution.RUNNING)
-        # a0 writes the task's real typed output to the output location, so there is nothing for the
+        # a0 writes the task's typed output to the output location, so there is nothing for the
         # connector to synthesise; Flyte reads the output from that location on success.
         return Resource(
             phase=phase,

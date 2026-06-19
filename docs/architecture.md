@@ -64,7 +64,7 @@ task sets `gang_id` and a `gang_cardinality` of two or more, the connector attac
 annotations (`armadaproject.io/gangId`, `armadaproject.io/gangCardinality`) to the submission.
 Jobs sharing a gang are scheduled all-or-nothing together.
 
-## Real Python tasks
+## Python function tasks
 
 A normal `@env.task` function can run its body inside an Armada pod. Register `ArmadaConfig` as a
 `TaskEnvironment` plugin (`ArmadaFunctionTask`, wired via `TaskPluginRegistry`), then:
@@ -105,7 +105,7 @@ The connector runs in two ways with the same code:
 ## Limitations and next steps
 
 What works today: real Armada submission, status polling, gang scheduling, DAG dataflow, in-pod
-compute for real Python `@env.task` functions running in
+compute for `@env.task` Python functions running in
 the pod (see above), and both execution modes above.
 
 One prerequisite is outside this repo:

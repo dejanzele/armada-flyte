@@ -34,7 +34,7 @@ This builds the image and creates the connector deployment. After that, a task w
 `task_type` is `armada` is routed to it automatically, so workflows run without local execution.
 A deployed Flyte backend is the one prerequisite this repo does not stand up for you.
 
-## Real Python tasks through the backend
+## Python function tasks through the backend
 
 `examples/function.py --backend` registers a real `@env.task` with the backend and runs it
 on Armada, so it appears in the Flyte UI with its true output (the one-command `./demo/run.sh`
@@ -46,5 +46,5 @@ wraps this). Two things matter here that local execution hides:
   Armada cluster is separate from the backend, use the store's externally reachable endpoint.
 - **Runtime arguments.** For a backend run, FlytePropeller normally fills the `a0` runtime args
   (`--run-base-dir`, `--org`/`--project`/`--domain`, and the run/action names). The connector fills
-  them itself from the task execution metadata, so the function runs and its real typed output is
+  them itself from the task execution metadata, so the function runs and its typed output is
   recorded (not a synthesised placeholder).

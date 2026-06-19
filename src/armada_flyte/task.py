@@ -1,8 +1,8 @@
 """Authoring surface: route a Flyte 2 ``@env.task`` to Armada.
 
 Set ``plugin_config=ArmadaConfig(...)`` on a ``TaskEnvironment`` and every ``@env.task`` in it runs
-its real Python body in an Armada pod (via :class:`ArmadaFunctionTask`, registered as the plugin
-for :class:`ArmadaConfig`). ``ArmadaConfig`` stays minimal: declare resources the stock-Flyte way
+its function body in an Armada pod (via :class:`ArmadaFunctionTask`, registered as the plugin for
+:class:`ArmadaConfig`). ``ArmadaConfig`` stays minimal: declare resources the stock-Flyte way
 (``flyte.Resources``); ``ArmadaConfig`` carries only the Armada-specific knobs.
 """
 
@@ -39,7 +39,7 @@ class ArmadaConfig:
 
 
 class ArmadaFunctionTask(AsyncConnectorExecutorMixin, AsyncFunctionTaskTemplate):
-    """A real Python ``@env.task`` that runs its function body inside an Armada pod.
+    """A Flyte ``@env.task`` whose function body runs inside an Armada pod.
 
     Registered as the plugin for ``ArmadaConfig``, so a whole environment routes to Armada::
 
