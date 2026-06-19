@@ -28,6 +28,10 @@ async def square(x: int) -> int:
 A stock `@env.task` and one `plugin_config` line. Fan out with `asyncio.gather`, pass dataclasses
 between tasks, gang-schedule a group: it is all just Flyte, running on Armada.
 
+The connector submits to the Armada at `ARMADA_URL` (default `localhost:50051`). Point it at a
+remote cluster by setting that env var, e.g. `ARMADA_URL=armada.example.com:50051`. The endpoint is
+a deployment setting, not part of your task code.
+
 ## See it run
 
 One command wires everything up, runs the task through a Flyte backend, and prints the result:
