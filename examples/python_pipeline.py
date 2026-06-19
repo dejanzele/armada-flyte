@@ -41,7 +41,7 @@ import flyte.storage
 
 from armada_flyte import ArmadaConfig
 
-IMAGE = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:latest")
+IMAGE = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:v1")
 
 # Worker tasks run on Armada; the driver runs locally and orchestrates them.
 work = flyte.TaskEnvironment(
