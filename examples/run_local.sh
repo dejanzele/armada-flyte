@@ -44,7 +44,7 @@ kind load docker-image "${IMAGE}" --name "${KIND_CLUSTER}" >/dev/null
 
 echo "==> 3/3  Run ${EXAMPLE} (local execution)"
 # The blob store both this process and the Armada pods use. The host LAN IP is the one address both
-# reach. The example reads these (the in-process connector at import, the client at flyte.init).
+# reach. The example reads these (the in-process connector on first use, the client at flyte.init).
 HOST_IP="${HOST_IP:-$(ipconfig getifaddr en0 2>/dev/null || hostname -I | awk '{print $1}')}"
 export FLYTE_BLOB_ENDPOINT="http://${HOST_IP}:${BLOB_PORT}"
 export FLYTE_BLOB_ACCESS_KEY=minio

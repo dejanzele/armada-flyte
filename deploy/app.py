@@ -25,7 +25,9 @@ connector = flyte.app.ConnectorEnvironment(
     image=image,
     resources=flyte.Resources(cpu="1", memory="1Gi"),
     env_vars={
-        # Point these at the Armada services reachable from the connector pod.
+        # This is the connector's config for the backend path: the connector runs in this pod, so
+        # its settings (the Armada endpoint, the blob store, and any future auth) are set here, on
+        # the deployment, not in task code. Prefer a mounted secret over a literal for credentials.
         "ARMADA_URL": "armada-server:50051",
     },
 )

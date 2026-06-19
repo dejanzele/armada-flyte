@@ -16,7 +16,6 @@ the pod with its inputs and outputs flowing through the configured blob store.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -24,6 +23,7 @@ import grpc
 
 # Must run before any armada_client import (aliases vendored google.api to standard).
 import armada_flyte._proto_compat  # noqa: F401
+from armada_flyte.config import ConnectorConfig, resolve_config
 from armada_client.armada import submit_pb2
 from armada_client.client import ArmadaClient
 from armada_client.k8s.io.api.core.v1 import generated_pb2 as core_v1
@@ -135,20 +135,26 @@ class ArmadaConnector(AsyncConnector):
     task_type_name = "armada"
     metadata_type = ArmadaJobMetadata
 
-    def __init__(self, armada_url: Optional[str] = None):
-        self._url = armada_url or os.environ.get("ARMADA_URL", "localhost:50051")
-        # Storage config the Armada pods get (as FLYTE_AWS_*), pointing at the same store the Flyte
-        # client uploaded to. Set by the operator (or the runner scripts) via FLYTE_BLOB_*.
-        self._blob_endpoint = os.environ.get("FLYTE_BLOB_ENDPOINT", "")
-        self._blob_key = os.environ.get("FLYTE_BLOB_ACCESS_KEY", "")
-        self._blob_secret = os.environ.get("FLYTE_BLOB_SECRET_KEY", "")
+    def __init__(self, config: Optional[ConnectorConfig] = None):
+        # None resolves lazily (env + configure() overrides) on first use, so configure() works
+        # after import and there is no set-env-before-import trap. Pass a config to pin it (a
+        # connector service launcher, or tests).
+        self._config = config
         self._client: Optional[ArmadaClient] = None
 
     @property
+    def config(self) -> ConnectorConfig:
+        if self._config is None:
+            self._config = resolve_config()
+        return self._config
+
+    @property
     def client(self) -> ArmadaClient:
-        # Lazily build the channel so importing the module never opens a socket.
+        # Lazily build the channel so importing the module never opens a socket. This is the one
+        # place to add auth/TLS later: swap insecure_channel for a secure channel built from
+        # self.config (token credentials / CA cert).
         if self._client is None:
-            self._client = ArmadaClient(grpc.insecure_channel(self._url))
+            self._client = ArmadaClient(grpc.insecure_channel(self.config.armada_url))
         return self._client
 
     def _storage_env(self) -> list:
@@ -157,12 +163,13 @@ class ArmadaConnector(AsyncConnector):
         flyte.storage.S3.auto(). This is a self-hosted S3 store (MinIO/RustFS), not AWS cloud: the
         endpoint differs from the backend's because the Armada pod is on another cluster, but the
         credentials are the platform's. obstore allows plain HTTP by default, so no extra flags."""
-        if not self._blob_endpoint:
+        cfg = self.config
+        if not cfg.blob_endpoint:
             return []
         return [
-            core_v1.EnvVar(name="FLYTE_AWS_ENDPOINT", value=self._blob_endpoint),
-            core_v1.EnvVar(name="FLYTE_AWS_ACCESS_KEY_ID", value=self._blob_key),
-            core_v1.EnvVar(name="FLYTE_AWS_SECRET_ACCESS_KEY", value=self._blob_secret),
+            core_v1.EnvVar(name="FLYTE_AWS_ENDPOINT", value=cfg.blob_endpoint),
+            core_v1.EnvVar(name="FLYTE_AWS_ACCESS_KEY_ID", value=cfg.blob_access_key),
+            core_v1.EnvVar(name="FLYTE_AWS_SECRET_ACCESS_KEY", value=cfg.blob_secret_key),
         ]
 
     @staticmethod

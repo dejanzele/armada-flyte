@@ -29,8 +29,15 @@ A stock `@env.task` and one `plugin_config` line. Fan out with `asyncio.gather`,
 between tasks, gang-schedule a group: it is all just Flyte, running on Armada.
 
 The connector submits to the Armada at `ARMADA_URL` (default `localhost:50051`). Point it at a
-remote cluster by setting that env var, e.g. `ARMADA_URL=armada.example.com:50051`. The endpoint is
-a deployment setting, not part of your task code.
+remote cluster by setting that env var, or in code:
+
+```python
+import armada_flyte
+armada_flyte.configure(armada_url="armada.example.com:50051")   # auth/TLS will land here too
+```
+
+The endpoint (and any future credentials) is connector config, kept out of your task code so it
+never lands in the control plane. See [docs/getting-started.md](docs/getting-started.md#configuration).
 
 ## See it run
 

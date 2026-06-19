@@ -54,8 +54,21 @@ pipeline). To run on a Flyte backend and see it in the Flyte UI, use `./demo/run
 
 ## Configuration
 
-- `ARMADA_URL` (default `localhost:50051`): the Armada submit/status gRPC endpoint, read by the
-  connector.
+The connector's settings (endpoint, the blob store the pods use, and later auth/TLS) resolve in
+this order, lowest to highest: built-in defaults, then the environment, then in-code overrides.
+
+- **Environment**: `ARMADA_URL` (default `localhost:50051`, the Armada submit/status gRPC endpoint),
+  and `FLYTE_BLOB_ENDPOINT` / `FLYTE_BLOB_ACCESS_KEY` / `FLYTE_BLOB_SECRET_KEY` for the blob store.
+  The runner scripts set the blob vars for you.
+- **In code**: `armada_flyte.configure(armada_url=...)`, called before the first task runs. This is
+  the home for credentials (it never reaches your task config or the control-plane DB). For local
+  execution call it in your run script; for the backend, in the connector service launcher.
+
+Settings resolve lazily on first use, so `configure()` works after `import armada_flyte` (no
+set-the-env-var-before-import ordering trap).
+
+Other knobs:
+
 - `ARMADA_TASK_IMAGE` (default `armada-flyte-task:v1`): the task image the runner builds and loads.
 
 If something does not behave, check [gotchas.md](gotchas.md) first. Most setup problems are

@@ -9,7 +9,15 @@ Armada.
 # any armada_client import, avoiding a duplicate google/api/http.proto registration.
 import armada_flyte._proto_compat  # noqa: F401,E402
 
+from armada_flyte.config import ConnectorConfig, configure
 from armada_flyte.connector import ArmadaConnector, ArmadaJobMetadata
 from armada_flyte.task import ArmadaConfig, ArmadaFunctionTask
 
-__all__ = ["ArmadaConnector", "ArmadaJobMetadata", "ArmadaConfig", "ArmadaFunctionTask"]
+__all__ = [
+    "ArmadaConnector",
+    "ArmadaJobMetadata",
+    "ArmadaConfig",
+    "ArmadaFunctionTask",
+    "ConnectorConfig",
+    "configure",
+]

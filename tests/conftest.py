@@ -28,7 +28,20 @@ def make_custom():
         return s
 
     return _make
+
+
+from armada_flyte import ConnectorConfig
 from armada_flyte.connector import ArmadaConnector
+
+
+@pytest.fixture(autouse=True)
+def _reset_connector_overrides():
+    """Isolate configure() overrides between tests (they live in module-level global state)."""
+    from armada_flyte import config as _config
+
+    _config._overrides.clear()
+    yield
+    _config._overrides.clear()
 
 
 @pytest.fixture
@@ -44,6 +57,6 @@ def connector(mock_client: MagicMock) -> ArmadaConnector:
     Because ``_client`` is pre-set, the ``client`` property short-circuits and never
     opens a socket, so the connector's create/get/delete logic runs offline.
     """
-    c = ArmadaConnector(armada_url="localhost:50051")
+    c = ArmadaConnector(ConnectorConfig())
     c._client = mock_client
     return c
