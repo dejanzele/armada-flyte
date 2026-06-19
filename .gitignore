@@ -6,3 +6,6 @@ __pycache__/
 build/
 dist/
 .pytest_cache/
+
+# Internal working notes (design docs, not shipped)
+notes/
