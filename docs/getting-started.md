@@ -28,6 +28,12 @@ python3.11 -m venv .venv
 ./.venv/bin/pip install -e ".[dev]"
 ```
 
+To use the connector in your own project instead of this repo, install it directly:
+
+```
+pip install "armada-flyte @ git+https://github.com/armadaproject/armada-flyte.git"
+```
+
 ## 3. Run the example
 
 ```
