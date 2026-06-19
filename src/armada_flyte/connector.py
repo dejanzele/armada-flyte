@@ -208,10 +208,9 @@ class ArmadaConnector(AsyncConnector):
         ``--outputs-path`` arg; the output_prefix passed to create() is only the base raw-data dir,
         not this per-action location, so we read it from the args (and store it for get() to use)."""
         args = list(args)
-        if "--outputs-path" in args:
-            i = args.index("--outputs-path")
-            if i + 1 < len(args):
-                return args[i + 1]
+        for flag, value in zip(args, args[1:]):
+            if flag == "--outputs-path":
+                return value
         return ""
 
     @staticmethod
