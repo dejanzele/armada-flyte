@@ -9,3 +9,6 @@ dist/
 
 # Internal working notes (design docs, not shipped)
 notes/
+
+# IDE project files
+.idea/
