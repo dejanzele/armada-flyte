@@ -9,11 +9,11 @@ The connector implements the three-method Flyte v2 connector contract:
 In local execution, ``flyte.connectors.AsyncConnectorExecutorMixin`` drives this loop
 in-process: it calls ``create`` once, then polls ``get`` every 3s until a terminal phase.
 
-Each DAG node runs a real Armada job. By default the workload is a placeholder (e.g. ``echo``)
-and the node's output is synthesised from the task's ``output_template`` and inputs. With
-``capture_result=True`` the pod does real work and the connector reads its result from the pod
-logs. Running an arbitrary Python function inside the pod (shipping code and moving inputs and
-outputs through a blob store) is not supported yet.
+Each DAG node runs a real Armada job. For a placeholder ``ArmadaTask`` the workload is a shell
+command (e.g. ``echo``) and the node's output is synthesised from the task's ``output_template``,
+or read from the pod logs when ``capture_result=True``. For a real ``@env.task`` function the
+connector wraps Flyte's rendered container (the ``a0`` entrypoint) into the pod, so the function
+body runs with its inputs and outputs flowing through the configured blob store.
 """
 
 from __future__ import annotations
@@ -98,6 +98,21 @@ def _quantity(value: str) -> api_resource.Quantity:
     return api_resource.Quantity(string=value)
 
 
+def _resources(cpu: str, memory: str) -> core_v1.ResourceRequirements:
+    # Requests == limits so the task gets a guaranteed QoS pod.
+    requests = {"cpu": _quantity(cpu), "memory": _quantity(memory)}
+    return core_v1.ResourceRequirements(requests=requests, limits=dict(requests))
+
+
+def _pod_spec(container: core_v1.Container) -> core_v1.PodSpec:
+    # armada_client's k8s protos use camelCase field names.
+    return core_v1.PodSpec(
+        terminationGracePeriodSeconds=0,
+        restartPolicy="Never",
+        containers=[container],
+    )
+
+
 class ArmadaConnector(AsyncConnector):
     name = "Armada Connector"
     task_type_name = "armada"
@@ -122,9 +137,6 @@ class ArmadaConnector(AsyncConnector):
         return self._client
 
     def _build_pod_spec(self, cfg: Dict[str, Any], inputs: Dict[str, Any]) -> core_v1.PodSpec:
-        cpu = _quantity(cfg.get("cpu", "100m"))
-        memory = _quantity(cfg.get("memory", "128Mi"))
-        requests = {"cpu": cpu, "memory": memory}
         # Expose each input to the workload as an upper-cased env var, so the pod can do real
         # work on its inputs (e.g. input "dataset" becomes $DATASET).
         env = [core_v1.EnvVar(name=k.upper(), value=str(v)) for k, v in inputs.items()]
@@ -134,15 +146,9 @@ class ArmadaConnector(AsyncConnector):
             command=list(cfg.get("command", ["sh", "-c", "echo hello from armada"])),
             args=list(cfg.get("args", [])),
             env=env,
-            # Requests == limits so the task gets a guaranteed QoS pod.
-            resources=core_v1.ResourceRequirements(requests=requests, limits=dict(requests)),
+            resources=_resources(cfg.get("cpu", "100m"), cfg.get("memory", "128Mi")),
         )
-        # armada_client's k8s protos use camelCase field names.
-        return core_v1.PodSpec(
-            terminationGracePeriodSeconds=0,
-            restartPolicy="Never",
-            containers=[container],
-        )
+        return _pod_spec(container)
 
     def _storage_env(self) -> list:
         """Env vars so a function-task pod can reach the blob store (S3/MinIO over plain HTTP)."""
@@ -196,9 +202,6 @@ class ArmadaConnector(AsyncConnector):
     def _pod_from_flyte_container(self, c, cfg: Dict[str, Any], output_prefix: str = "", meta=None) -> core_v1.PodSpec:
         """Wrap Flyte's rendered task container (the a0 entrypoint) into an Armada pod, so the
         user's real function runs in the pod with inputs/outputs via the blob store."""
-        cpu = _quantity(cfg.get("cpu", "1"))
-        memory = _quantity(cfg.get("memory", "500Mi"))
-        requests = {"cpu": cpu, "memory": memory}
         # Build env from the rendered container, then let our blob-store env override any matching
         # keys (e.g. a backend may bake an in-cluster storage endpoint the Armada pods can't reach).
         env_by_name: Dict[str, str] = {}
@@ -215,13 +218,9 @@ class ArmadaConnector(AsyncConnector):
             env=env,
             # Use the image already loaded into the cluster (e.g. via `kind load`).
             imagePullPolicy="IfNotPresent",
-            resources=core_v1.ResourceRequirements(requests=requests, limits=dict(requests)),
+            resources=_resources(cfg.get("cpu", "1"), cfg.get("memory", "500Mi")),
         )
-        return core_v1.PodSpec(
-            terminationGracePeriodSeconds=0,
-            restartPolicy="Never",
-            containers=[container],
-        )
+        return _pod_spec(container)
 
     def _result_from_logs(self, job_id: str) -> Optional[str]:
         """Read the pod's stdout via binoculars and return the last RESULT_MARKER line's value."""
