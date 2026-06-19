@@ -157,6 +157,26 @@ class ArmadaConnector(AsyncConnector):
             self._client = ArmadaClient(grpc.insecure_channel(self.config.armada_url))
         return self._client
 
+    def _call(self, what: str, fn, *args, **kwargs):
+        """Run an Armada RPC, turning a connection failure into an actionable error.
+
+        The raw gRPC ``UNAVAILABLE`` is opaque to users, and it is the symptom of the most common
+        setup mistake (wrong endpoint, cluster down, or a configure() call that landed too late).
+        We name the endpoint we tried and how to change it. Any other gRPC status (a real Armada
+        error) surfaces unchanged.
+        """
+        try:
+            return fn(*args, **kwargs)
+        except grpc.RpcError as e:
+            if e.code() != grpc.StatusCode.UNAVAILABLE:
+                raise
+            url = self.config.armada_url
+            raise ConnectionError(
+                f"Could not reach Armada at {url} while {what}. Check the cluster is up and the "
+                f"endpoint is correct, then point the connector at it with ARMADA_URL=host:port or "
+                f"armada_flyte.configure(armada_url='host:port')."
+            ) from e
+
     def _storage_env(self) -> list:
         """Stamp the platform storage config onto the pod using Flyte's own FLYTE_AWS_* convention,
         exactly as FlytePropeller does for in-cluster task pods. The a0 runtime reads these via
@@ -275,7 +295,13 @@ class ArmadaConnector(AsyncConnector):
             labels={"flyte.org/connector": "armada"},
             annotations=annotations,
         )
-        resp = self.client.submit_jobs(queue=queue, job_set_id=job_set_id, job_request_items=[item])
+        resp = self._call(
+            "submitting the job",
+            self.client.submit_jobs,
+            queue=queue,
+            job_set_id=job_set_id,
+            job_request_items=[item],
+        )
         first = resp.job_response_items[0]
         if first.error:
             raise RuntimeError(f"Armada rejected job submission: {first.error}")
@@ -285,7 +311,9 @@ class ArmadaConnector(AsyncConnector):
         return ArmadaJobMetadata(job_id=first.job_id, job_set_id=job_set_id, queue=queue)
 
     async def get(self, resource_meta: ArmadaJobMetadata, **kwargs) -> Resource:
-        states = self.client.get_job_status([resource_meta.job_id]).job_states
+        states = self._call(
+            "polling job status", self.client.get_job_status, [resource_meta.job_id]
+        ).job_states
         state = states.get(resource_meta.job_id, submit_pb2.UNKNOWN)
         phase = _ARMADA_STATE_TO_PHASE.get(state, TaskExecution.RUNNING)
         # a0 writes the task's typed output to the output location, so there is nothing for the
@@ -296,7 +324,9 @@ class ArmadaConnector(AsyncConnector):
         )
 
     async def delete(self, resource_meta: ArmadaJobMetadata, **kwargs):
-        self.client.cancel_jobs(
+        self._call(
+            "cancelling the job",
+            self.client.cancel_jobs,
             queue=resource_meta.queue,
             job_set_id=resource_meta.job_set_id,
             job_id=resource_meta.job_id,
