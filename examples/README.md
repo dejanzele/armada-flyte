@@ -12,12 +12,12 @@ Five examples, in order:
 | [`function.py`](function.py) | **Simple.** One task that does real work: a Black-Scholes option price. | `call price = 10.4506` |
 | [`fanout.py`](fanout.py) | **Parallel.** A typed dataclass through a fan-out / fan-in (independent jobs via `asyncio.gather`). | `Stats(...)  mean = 506.47` |
 | [`ml_pipeline.py`](ml_pipeline.py) | **Complex.** End-to-end ML: make data, k-fold cross-validation in parallel, pick the best model, evaluate. | `best alpha = 1.0  fit y ~ 3.00 x + 2.00` |
-| [`gang.py`](gang.py) | **Armada gangs.** N co-dependent workers, scheduled all-or-nothing (the one feature plain k8s cannot give you). | `global average = ...` |
+| [`gang.py`](gang.py) | **Armada gangs.** N co-dependent workers, scheduled all-or-nothing (the one feature plain k8s cannot give you). | `global average = 54.32` |
 
 ## Run one
 
 The runner builds the task image, wires the blob store, and submits the example through the Flyte
-backend (the default - the run shows up in the Flyte UI):
+backend (the default, so the run shows up in the Flyte UI):
 
 ```bash
 ./demo/run.sh examples/hello.py
@@ -26,8 +26,8 @@ backend (the default - the run shows up in the Flyte UI):
 Pass any example as the argument. Prerequisite: a running Armada cluster and a Flyte 2 backend (see
 [../docs/getting-started.md](../docs/getting-started.md)).
 
-You can also run an example locally for fast iteration (no Flyte backend needed); it runs the task
-in-process and prints the result in your terminal:
+You can also run an example locally for fast iteration, with no Flyte backend needed. It runs the
+task in-process and prints the result in your terminal:
 
 ```bash
 ./examples/run_local.sh examples/hello.py

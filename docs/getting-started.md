@@ -29,15 +29,24 @@ go run cmd/armadactl/main.go create queue flyte
 
 Tear the cluster down later with `mage KindTeardown`, and stop the dependencies with `mage dev:down`.
 
-## 2. Bring up a Flyte backend
+## 2. Bring up a Flyte backend (with the Armada connector plugin)
 
-The backend is what routes `armada` tasks to the connector and shows runs in the UI. It is a Flyte 2
-devbox (`flyte start devbox`) whose executor registers the Armada connector plugin.
+The backend routes `armada` tasks to the connector and shows runs in the Flyte UI. It must be a
+Flyte 2 backend whose executor registers the Armada connector plugin. Stock Flyte 2 does not register
+it (the patch is [dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1), upstreaming in
+progress), so build the backend from that branch. Its bundled devbox is a k3d cluster with everything
+pre-installed (the TaskAction CRD, Knative, PostgreSQL, and a blob store):
 
-This is the one prerequisite this repo does not stand up for you: stock Flyte 2 does not register the
-plugin (that work is upstreaming), so you need an executor build that includes it. Once the devbox is
-running on `localhost:30080` with that build, the rest is one command. [../demo/](../demo/) describes
-exactly what the run script expects from the backend (the devbox name, blob store, and ports).
+```
+git clone -b armada https://github.com/dejanzele/flyte.git
+cd flyte
+make devbox-build    # one-time: builds the devbox image including the connector plugin (a heavy build)
+make devbox-run      # starts it; the Flyte UI comes up on http://localhost:30080
+```
+
+This is the one prerequisite this repo does not stand up for you. Once `http://localhost:30080`
+answers, continue. [../demo/](../demo/) describes what the run script expects from the backend (the
+devbox container name, blob store, and ports).
 
 ## 3. Install this package
 
@@ -52,7 +61,7 @@ python3.11 -m venv .venv
 To use the connector in your own project instead, install it directly:
 
 ```
-pip install "armada-flyte @ git+https://github.com/armadaproject/armada-flyte.git"
+pip install "armada-flyte @ git+https://github.com/dejanzele/armada-flyte.git"
 ```
 
 ## 4. Submit your first task

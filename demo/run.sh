@@ -51,9 +51,9 @@ if [ "${FORCE_CONNECTOR:-0}" != "1" ] && lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/
   echo "    connector already running on :8000 (reusing; FORCE_CONNECTOR=1 to restart)"
 else
   # The Armada pods (on the kind cluster) read/write the backend's RustFS bucket through its
-  # host-published NodePort. The devbox ships RustFS with fixed sandbox defaults (the same for every
-  # `flyte start devbox`: creds rustfs/rustfsstorage on NodePort 30002), so there is nothing to look
-  # up. Override these if your backend uses a different store.
+  # host-published NodePort. The devbox ships RustFS with fixed sandbox defaults (creds
+  # rustfs/rustfsstorage on NodePort 30002), so there is nothing to look up. Override these if your
+  # backend uses a different store.
   blob="${FLYTE_BLOB_ENDPOINT:-http://$HOST_IP:30002}"
   key="${FLYTE_BLOB_ACCESS_KEY:-rustfs}"
   secret="${FLYTE_BLOB_SECRET_KEY:-rustfsstorage}"

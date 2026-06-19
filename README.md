@@ -14,10 +14,10 @@ import flyte
 from armada_flyte import ArmadaConfig
 
 env = flyte.TaskEnvironment(
-    "ml",
+    name="hello",
     image="armada-flyte-task:v1",
     resources=flyte.Resources(cpu=1, memory="512Mi"),
-    plugin_config=ArmadaConfig(queue="ml"),   # this line routes the task to Armada
+    plugin_config=ArmadaConfig(queue="flyte"),   # this line routes the task to Armada
 )
 
 @env.task

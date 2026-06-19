@@ -13,6 +13,9 @@ from armada_flyte import ArmadaConfig
 
 IMAGE = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:v1")
 
+# The connector submits to the Armada at $ARMADA_URL (default localhost:50051). Point it elsewhere
+# with that env var, or in code: armada_flyte.configure(armada_url="armada.example.com:50051").
+
 env = flyte.TaskEnvironment(
     name="hello",
     image=IMAGE,

@@ -43,9 +43,13 @@ The script does the wiring; it assumes two things are already running:
    mage dev:up no-auth  # Armada with a real executor
    ```
 
-2. **A Flyte 2 backend** whose executor routes `armada` tasks to the connector. This needs the
-   connector backend plugin registered in the executor (stock Flyte 2 does not register it). Run
-   the backend as a devbox (`flyte start devbox`) using an executor build that includes the plugin.
+2. **A Flyte 2 backend** whose executor registers the Armada connector plugin. Stock Flyte 2 does
+   not, so build it from [dejanzele/flyte#1](https://github.com/dejanzele/flyte/pull/1):
+
+   ```bash
+   git clone -b armada https://github.com/dejanzele/flyte.git
+   cd flyte && make devbox-build && make devbox-run   # Flyte UI on http://localhost:30080
+   ```
 
 Override defaults via env vars: `KIND_CLUSTER`, `DEVBOX`, `ARMADA_URL`, `HOST_IP`.
 

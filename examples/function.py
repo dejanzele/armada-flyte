@@ -16,9 +16,6 @@ from armada_flyte import ArmadaConfig
 
 IMAGE = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:v1")
 
-# The connector submits to the Armada at $ARMADA_URL (default localhost:50051). Point it elsewhere
-# with that env var, or in code: armada_flyte.configure(armada_url="armada.example.com:50051").
-
 env = flyte.TaskEnvironment(
     name="quant",
     image=IMAGE,
@@ -32,9 +29,11 @@ async def black_scholes_call(spot: float, strike: float, vol: float, rate: float
     """The Black-Scholes price of a European call option."""
     import math
 
+    def cdf(x: float) -> float:
+        return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
     d1 = (math.log(spot / strike) + (rate + 0.5 * vol * vol) * t) / (vol * math.sqrt(t))
     d2 = d1 - vol * math.sqrt(t)
-    cdf = lambda x: 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
     return spot * cdf(d1) - strike * math.exp(-rate * t) * cdf(d2)
 
 

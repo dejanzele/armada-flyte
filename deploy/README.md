@@ -37,9 +37,9 @@ A deployed Flyte backend is the one prerequisite this repo does not stand up for
 
 ## Python function tasks through the backend
 
-`examples/function.py --backend` registers an `@env.task` with the backend and runs it
-on Armada, so it appears in the Flyte UI with its true output (the one-command `./demo/run.sh`
-wraps this). Two things matter here that local execution hides:
+Running an example with `BACKEND=1` (which `./demo/run.sh` sets for you) registers the `@env.task`
+with the backend and runs it on Armada, so it appears in the Flyte UI with its true output. Two
+things matter here that local execution hides:
 
 - **One shared blob store.** The backend, the client, and the Armada pods must all read and write
   the same bucket. Point the connector service at it (`FLYTE_BLOB_ENDPOINT` /
@@ -48,4 +48,4 @@ wraps this). Two things matter here that local execution hides:
 - **Runtime arguments.** For a backend run, FlytePropeller normally fills the `a0` runtime args
   (`--run-base-dir`, `--org`/`--project`/`--domain`, and the run/action names). The connector fills
   them itself from the task execution metadata, so the function runs and its typed output is
-  recorded (not a synthesised placeholder).
+  recorded.
