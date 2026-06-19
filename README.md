@@ -75,8 +75,15 @@ multi-stage map-reduce in **one command**; see
 The examples run through Flyte local execution (`mode="local"`). That drives the submit-and-poll
 loop in your process, so there is no backend to stand up.
 
-The connector can also run as a gRPC service that a deployed Flyte backend routes to. See
-[deploy/](deploy/).
+To run on a **real Flyte backend** (the task registers with FlyteAdmin and shows up in the Flyte
+UI), use the one-command demo:
+
+```bash
+./demo/run.sh
+```
+
+It runs an ordinary `@env.task` on Armada through the backend and prints the result and UI link.
+See [demo/](demo/) for what it does and the one-time prerequisites.
 
 ## What works today
 

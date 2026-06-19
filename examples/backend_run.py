@@ -12,12 +12,15 @@ Prerequisites (beyond an Armada cluster):
     store the backend uses, reachable from the Armada cluster),
   - the task image available on the Armada cluster.
 
-Run:  ./.venv/bin/python examples/backend_run.py
+Run it with one command (which also wires the connector to the backend's blob store):
+
+    ./demo/run.sh
 """
 
 from __future__ import annotations
 
 import flyte
+import flyte.remote
 
 from armada_flyte import ArmadaConfig
 
@@ -36,7 +39,8 @@ async def square(x: int) -> int:
 if __name__ == "__main__":
     flyte.init(endpoint="localhost:30080", insecure=True, project="flytesnacks", domain="development")
     run = flyte.run(square, x=7)
-    print("run:", run.name)
-    print("url:", run.url)
+    print(f"\nsubmitted run {run.name}")
+    print(f"  UI: {run.url}")
     run.wait()
-    print("done; see the result in the Flyte UI")
+    result = flyte.remote.Run.get(run.name).outputs()[0]
+    print(f"\nsquare(7) = {result}  (real Python, computed in an Armada pod, via the Flyte backend)")
