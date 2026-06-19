@@ -31,6 +31,8 @@ greet = ArmadaTask(
     name="greet",
     plugin_config=ArmadaConfig(
         queue=QUEUE,
+        cpu="100m",
+        memory="128Mi",
         command=["sh", "-c", "echo 'hello from armada'; sleep 1"],
         output_template="Hello, {name}! (ran as armada job {job_id})",
     ),

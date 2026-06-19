@@ -34,6 +34,8 @@ worker = ArmadaTask(
     name="worker",
     plugin_config=ArmadaConfig(
         queue=QUEUE,
+        cpu="100m",
+        memory="128Mi",
         command=["sh", "-c", "echo 'worker running'; sleep 1"],
         output_template="worker[{shard}]=done (armada job {job_id})",
     ),
@@ -46,6 +48,8 @@ reduce = ArmadaTask(
     name="reduce",
     plugin_config=ArmadaConfig(
         queue=QUEUE,
+        cpu="100m",
+        memory="128Mi",
         command=["sh", "-c", "echo 'reducing'; sleep 1"],
         output_template="reduced {count} workers (armada job {job_id})",
     ),

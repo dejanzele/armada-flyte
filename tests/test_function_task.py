@@ -5,9 +5,21 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import flyte
+from flyteidl2.core import tasks_pb2 as ftp
 
 from armada_flyte import ArmadaConfig, ArmadaFunctionTask
 from armada_flyte.connector import ArmadaConnector
+
+
+def _rendered_container(reqs=None, limits=None, args=("a0", "--inputs", "s3://b/i.pb")):
+    """A stand-in for Flyte's rendered a0 container, with optional declared resources."""
+    def entries(d):
+        return [SimpleNamespace(name=k, value=v) for k, v in (d or {}).items()]
+
+    return SimpleNamespace(
+        image="task-img:latest", command=[], args=list(args), env=[],
+        resources=SimpleNamespace(requests=entries(reqs), limits=entries(limits)),
+    )
 
 
 def _backend_meta():
@@ -64,9 +76,7 @@ async def test_create_wraps_the_flyte_container(connector, mock_client):
     mock_client.submit_jobs.return_value = SimpleNamespace(
         job_response_items=[SimpleNamespace(job_id="01job", error="")]
     )
-    container = SimpleNamespace(
-        image="task-img:latest", command=[], args=["a0", "--inputs", "s3://b/i.pb"], env=[]
-    )
+    container = _rendered_container(reqs={ftp.Resources.CPU: "1", ftp.Resources.MEMORY: "1Gi"})
     task_template = SimpleNamespace(custom=None, container=container)
 
     await connector.create(task_template, inputs={})
@@ -74,3 +84,44 @@ async def test_create_wraps_the_flyte_container(connector, mock_client):
     pod = mock_client.create_job_request_item.call_args.kwargs["pod_spec"]
     assert pod.containers[0].image == "task-img:latest"
     assert list(pod.containers[0].args) == ["a0", "--inputs", "s3://b/i.pb"]
+
+
+async def test_native_resources_are_mapped(connector, mock_client):
+    # @env.task(resources=...) declares cpu/memory/gpu on the rendered container; the connector
+    # must honour them (the old code silently dropped them and produced a 1-CPU pod).
+    mock_client.submit_jobs.return_value = SimpleNamespace(
+        job_response_items=[SimpleNamespace(job_id="01job", error="")]
+    )
+    container = _rendered_container(
+        reqs={ftp.Resources.CPU: "4", ftp.Resources.MEMORY: "8Gi", ftp.Resources.GPU: "2"}
+    )
+    await connector.create(SimpleNamespace(custom=None, container=container), inputs={})
+
+    req = mock_client.create_job_request_item.call_args.kwargs["pod_spec"].containers[0].resources.requests
+    assert req["cpu"].string == "4"
+    assert req["memory"].string == "8Gi"
+    assert req["nvidia.com/gpu"].string == "2"
+
+
+async def test_armada_config_resources_override_native(connector, mock_client, make_custom):
+    # ArmadaConfig cpu/memory is the escape hatch: it wins over the rendered container's resources.
+    mock_client.submit_jobs.return_value = SimpleNamespace(
+        job_response_items=[SimpleNamespace(job_id="01job", error="")]
+    )
+    container = _rendered_container(reqs={ftp.Resources.CPU: "4", ftp.Resources.MEMORY: "8Gi"})
+    tt = SimpleNamespace(custom=make_custom(cpu="500m", memory="512Mi"), container=container)
+    await connector.create(tt, inputs={})
+
+    req = mock_client.create_job_request_item.call_args.kwargs["pod_spec"].containers[0].resources.requests
+    assert req["cpu"].string == "500m"
+    assert req["memory"].string == "512Mi"
+
+
+async def test_function_task_requires_resources(connector, mock_client):
+    # No ArmadaConfig cpu/memory and no declared resources on the container -> clear error.
+    container = _rendered_container(reqs={})
+    try:
+        await connector.create(SimpleNamespace(custom=None, container=container), inputs={})
+        assert False, "expected a resources-required error"
+    except ValueError as e:
+        assert "resource" in str(e).lower()

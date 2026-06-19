@@ -33,8 +33,17 @@ from armada_client.k8s.io.apimachinery.pkg.api.resource import generated_pb2 as 
 from armada_client.log_client import JobLogClient
 from flyte import logger
 from flyte.connectors import AsyncConnector, ConnectorRegistry, Resource, ResourceMeta
+from flyteidl2.core import tasks_pb2 as flyte_tasks_pb2
 from flyteidl2.core.execution_pb2 import TaskExecution
 from google.protobuf import json_format
+
+# Flyte's ResourceName enum (from @env.task(resources=...)) to the k8s resource key.
+_RESOURCE_NAME_TO_K8S = {
+    flyte_tasks_pb2.Resources.CPU: "cpu",
+    flyte_tasks_pb2.Resources.MEMORY: "memory",
+    flyte_tasks_pb2.Resources.GPU: "nvidia.com/gpu",
+    flyte_tasks_pb2.Resources.EPHEMERAL_STORAGE: "ephemeral-storage",
+}
 
 # A task that wants its real output captured prints a line beginning with this marker. The
 # connector reads it back from the job's pod logs once the job succeeds.
@@ -98,10 +107,55 @@ def _quantity(value: str) -> api_resource.Quantity:
     return api_resource.Quantity(string=value)
 
 
-def _resources(cpu: str, memory: str) -> core_v1.ResourceRequirements:
-    # Requests == limits so the task gets a guaranteed QoS pod.
-    requests = {"cpu": _quantity(cpu), "memory": _quantity(memory)}
-    return core_v1.ResourceRequirements(requests=requests, limits=dict(requests))
+def _resources_from_template(container) -> Optional[core_v1.ResourceRequirements]:
+    """Map a rendered Flyte container's declared resources (from `@env.task(resources=...)`) to a
+    k8s ResourceRequirements, honouring cpu/memory/gpu/ephemeral-storage and request vs limit
+    separately. Returns None when the container declares none, so the caller can fall back."""
+    res = getattr(container, "resources", None)
+    if res is None:
+        return None
+
+    def to_map(entries):
+        out = {}
+        for e in entries:
+            key = _RESOURCE_NAME_TO_K8S.get(e.name)
+            if key and e.value:
+                out[key] = _quantity(e.value)
+        return out
+
+    requests = to_map(res.requests)
+    limits = to_map(res.limits)
+    if not requests and not limits:
+        return None
+    # If the user gave only one side, mirror it (guaranteed QoS where possible).
+    return core_v1.ResourceRequirements(
+        requests=requests or dict(limits),
+        limits=limits or dict(requests),
+    )
+
+
+def _resolve_resources(cfg: Dict[str, Any], container=None) -> core_v1.ResourceRequirements:
+    """Resolve the pod's resources, REQUIRING cpu and memory. Armada rejects a job with no
+    resources, so we fail fast with a clear error instead of guessing a default.
+
+    Precedence: an explicit ArmadaConfig cpu/memory overrides; otherwise the resources declared
+    via @env.task(resources=...) on the rendered container are used.
+    """
+    native = _resources_from_template(container) if container is not None else None
+    requests = dict(native.requests) if native else {}
+    limits = dict(native.limits) if native else {}
+    for key, val in (("cpu", cfg.get("cpu")), ("memory", cfg.get("memory"))):
+        if val:
+            requests[key] = limits[key] = _quantity(val)
+    missing = [k for k in ("cpu", "memory") if k not in requests]
+    if missing:
+        raise ValueError(
+            f"Armada requires resource requests for {', '.join(missing)}. Declare them with "
+            "@env.task(resources=...) or ArmadaConfig(cpu=..., memory=...)."
+        )
+    for k, v in requests.items():  # mirror requests into limits (guaranteed QoS)
+        limits.setdefault(k, v)
+    return core_v1.ResourceRequirements(requests=requests, limits=limits)
 
 
 def _pod_spec(container: core_v1.Container) -> core_v1.PodSpec:
@@ -145,7 +199,7 @@ class ArmadaConnector(AsyncConnector):
             command=list(cfg.get("command", ["sh", "-c", "echo hello from armada"])),
             args=list(cfg.get("args", [])),
             env=env,
-            resources=_resources(cfg.get("cpu", "100m"), cfg.get("memory", "128Mi")),
+            resources=_resolve_resources(cfg),
         )
         return _pod_spec(container)
 
@@ -225,7 +279,7 @@ class ArmadaConnector(AsyncConnector):
             env=env,
             # Use the image already loaded into the cluster (e.g. via `kind load`).
             imagePullPolicy="IfNotPresent",
-            resources=_resources(cfg.get("cpu", "1"), cfg.get("memory", "500Mi")),
+            resources=_resolve_resources(cfg, c),
         )
         return _pod_spec(container)
 

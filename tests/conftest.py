@@ -11,9 +11,23 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from google.protobuf import json_format, struct_pb2
 
 # Imported for its proto-pool side effect before any armada_client import happens.
 import armada_flyte._proto_compat  # noqa: F401
+
+
+@pytest.fixture
+def make_custom():
+    """Factory for a task_template.custom Struct (a serialised ArmadaConfig). Defaults to a small
+    cpu/memory because the connector requires resources (Armada rejects jobs without them)."""
+
+    def _make(cpu: str = "100m", memory: str = "128Mi", **fields) -> struct_pb2.Struct:
+        s = struct_pb2.Struct()
+        json_format.ParseDict({"cpu": cpu, "memory": memory, **fields}, s)
+        return s
+
+    return _make
 from armada_flyte.connector import ArmadaConnector
 
 

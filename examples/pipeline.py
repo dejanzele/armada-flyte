@@ -44,6 +44,8 @@ generate = ArmadaTask(
     name="generate",
     plugin_config=ArmadaConfig(
         queue=QUEUE,
+        cpu="100m",
+        memory="128Mi",
         command=["sh", "-c", "echo ARMADA_RESULT:$(seq -s, 1 $COUNT)"],
         capture_result=True,
     ),
@@ -56,6 +58,8 @@ worker = ArmadaTask(
     name="worker",
     plugin_config=ArmadaConfig(
         queue=QUEUE,
+        cpu="100m",
+        memory="128Mi",
         command=["sh", "-c",
                  "echo ARMADA_RESULT:$(echo $NUMBERS | tr ',' '\\n' | "
                  "awk -v s=$SHARD -v n=$SHARDS '(NR-1)%n==s{t+=$1} END{print t+0}')"],
@@ -72,6 +76,8 @@ aggregate = ArmadaTask(
     name="aggregate",
     plugin_config=ArmadaConfig(
         queue=QUEUE,
+        cpu="100m",
+        memory="128Mi",
         command=["sh", "-c",
                  "echo ARMADA_RESULT:$(echo $PARTS | tr ',' '\\n' | awk '{t+=$1} END{print t+0}')"],
         capture_result=True,

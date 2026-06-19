@@ -25,8 +25,11 @@ class ArmadaConfig:
     image: str = "busybox:latest"
     command: List[str] = field(default_factory=lambda: ["sh", "-c", "echo hello from armada"])
     args: List[str] = field(default_factory=list)
-    cpu: str = "100m"
-    memory: str = "128Mi"
+    # None means "use what the task declared via @env.task(resources=...), else a default". Set
+    # these only to override (the escape hatch). For placeholder ArmadaTask, None falls back to a
+    # small default (100m/128Mi); for a function task, to the rendered container's resources.
+    cpu: Optional[str] = None
+    memory: Optional[str] = None
     namespace: str = "default"
     priority: int = 1
     # Rendered by the connector on success: ``.format(job_id=..., **inputs)``.
