@@ -9,8 +9,8 @@
 #   - starts the connector service pointed at that store,
 #   - runs the example and prints the result.
 #
-# Run a different example by passing it as an argument (default: examples/backend_run.py):
-#   ./demo/run.sh examples/backend_gang.py
+# Run a different example by passing it as an argument (default: examples/python_function.py):
+#   ./demo/run.sh examples/gang_dag.py
 #
 # One-time prerequisites are in demo/README.md (an Armada cluster, and a Flyte backend whose
 # executor routes `armada` tasks to the connector). Override defaults with env vars if needed:
@@ -19,7 +19,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 PY=./.venv/bin/python
-EXAMPLE="${1:-examples/backend_run.py}"
+EXAMPLE="${1:-examples/python_function.py}"
 KIND_CLUSTER="${KIND_CLUSTER:-armada-test}"
 DEVBOX="${DEVBOX:-flyte-devbox}"
 # A non-latest tag so the driver pod (a normal backend pod) defaults to imagePullPolicy IfNotPresent
@@ -45,24 +45,31 @@ kind load docker-image "$IMAGE" --name "$KIND_CLUSTER" >/dev/null
 docker save "$IMAGE" | docker exec -i "$DEVBOX" ctr -n k8s.io images import - >/dev/null
 
 echo "==> 2/3  Point the connector at the backend's blob store"
-# The Armada pods (on the kind cluster) read/write the backend's bucket through its host-published
-# NodePort, with the backend's own credentials.
-key=$(docker exec "$DEVBOX" sh -c "$KC kubectl get secret rustfs-secret -n flyte -o jsonpath='{.data.RUSTFS_ACCESS_KEY}' | base64 -d")
-secret=$(docker exec "$DEVBOX" sh -c "$KC kubectl get secret rustfs-secret -n flyte -o jsonpath='{.data.RUSTFS_SECRET_KEY}' | base64 -d")
-port=$(docker exec "$DEVBOX" sh -c "$KC kubectl get svc rustfs-svc -n flyte -o jsonpath='{.spec.ports[0].nodePort}'")
-blob="http://$HOST_IP:$port"
-echo "    blob store: $blob"
-
-pkill -f "bin/c0 --port 8000" 2>/dev/null || true
-sleep 2
-ARMADA_URL="${ARMADA_URL:-localhost:50051}" BINOCULARS_URL="${BINOCULARS_URL:-localhost:50053}" \
-  FLYTE_BLOB_ENDPOINT="$blob" FLYTE_BLOB_ACCESS_KEY="$key" FLYTE_BLOB_SECRET_KEY="$secret" \
-  nohup ./.venv/bin/c0 --port 8000 --prometheus_port 9099 >/tmp/armada-flyte-c0.log 2>&1 &
-for _ in $(seq 1 15); do
-  grep -aq "armada (0)" /tmp/armada-flyte-c0.log 2>/dev/null && break
-  sleep 1
-done
-echo "    connector ready (log: /tmp/armada-flyte-c0.log)"
+# Reuse a running connector. Restarting it while the backend holds a gRPC connection to the old
+# process causes a transient "connector Unavailable" failure on the next task; to re-wire, stop it
+# first (pkill -f 'bin/c0 --port 8000') and rerun. Force a restart with FORCE_CONNECTOR=1.
+if [ "${FORCE_CONNECTOR:-0}" != "1" ] && lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "    connector already running on :8000 (reusing; FORCE_CONNECTOR=1 to restart)"
+else
+  # The Armada pods (on the kind cluster) read/write the backend's bucket through its host-published
+  # NodePort, with the backend's own credentials.
+  key=$(docker exec "$DEVBOX" sh -c "$KC kubectl get secret rustfs-secret -n flyte -o jsonpath='{.data.RUSTFS_ACCESS_KEY}' | base64 -d")
+  secret=$(docker exec "$DEVBOX" sh -c "$KC kubectl get secret rustfs-secret -n flyte -o jsonpath='{.data.RUSTFS_SECRET_KEY}' | base64 -d")
+  port=$(docker exec "$DEVBOX" sh -c "$KC kubectl get svc rustfs-svc -n flyte -o jsonpath='{.spec.ports[0].nodePort}'")
+  blob="http://$HOST_IP:$port"
+  echo "    blob store: $blob"
+  pkill -f "bin/c0 --port 8000" 2>/dev/null || true
+  sleep 2
+  ARMADA_URL="${ARMADA_URL:-localhost:50051}" BINOCULARS_URL="${BINOCULARS_URL:-localhost:50053}" \
+    FLYTE_BLOB_ENDPOINT="$blob" FLYTE_BLOB_ACCESS_KEY="$key" FLYTE_BLOB_SECRET_KEY="$secret" \
+    nohup ./.venv/bin/c0 --port 8000 --prometheus_port 9099 >/tmp/armada-flyte-c0.log 2>&1 &
+  for _ in $(seq 1 15); do
+    grep -aq "armada (0)" /tmp/armada-flyte-c0.log 2>/dev/null && break
+    sleep 1
+  done
+  echo "    connector ready (log: /tmp/armada-flyte-c0.log)"
+fi
 
 echo "==> 3/3  Run $EXAMPLE through the backend"
-exec "$PY" "$EXAMPLE"
+# The merged examples branch on BACKEND: the demo always runs the backend path (Flyte UI).
+exec env BACKEND=1 "$PY" "$EXAMPLE"

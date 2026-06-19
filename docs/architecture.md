@@ -63,7 +63,7 @@ fair-share scheduling, so the node should retry rather than fail the run.
 task sets `gang_id` and a `gang_cardinality` of two or more, the connector attaches Armada's gang
 annotations (`armadaproject.io/gangId`, `armadaproject.io/gangCardinality`) to the submission.
 Jobs sharing a gang are scheduled all-or-nothing together. Call the same `ArmadaTask` N times
-inside the DAG to submit N gang members. See `examples/gang_pipeline.py`.
+inside the DAG to submit N gang members. See `examples/pipeline.py`.
 
 ## Output: synthesised, or read from the pod
 

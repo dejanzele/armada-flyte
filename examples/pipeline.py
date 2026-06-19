@@ -1,9 +1,9 @@
 """A real distributed sum: generate then a gang of workers then aggregate.
 
-Same shape as gang_pipeline.py, but the pods do actual work instead of a placeholder. Each
-node's inputs are passed into its pod as environment variables, the pod computes a result with
-real shell arithmetic and prints ``ARMADA_RESULT:<value>``, and the connector reads that line
-back from the pod's logs (set on the task with ``capture_result=True``).
+A gang DAG on the lower-level ArmadaTask surface, with no blob store: the pods do real work via
+shell. Each node's inputs are passed into its pod as environment variables, the pod computes a
+result with real shell arithmetic and prints ``ARMADA_RESULT:<value>``, and the connector reads
+that line back from the pod's logs (set on the task with ``capture_result=True``).
 
     generate           prints the numbers 1..N as a CSV
         |

@@ -11,7 +11,7 @@ Armada job.
     shard_stats(chunk)   -> per-shard Stats, computed in S parallel Armada pods (fan-out)
     merge(parts)         -> combined Stats (fan-in)
 
-Run it with one command: examples/run_python_pipeline.sh
+Run it with one command: examples/run_local.sh
 """
 
 from __future__ import annotations

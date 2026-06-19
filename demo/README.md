@@ -38,7 +38,7 @@ Run a different example by passing it, for example the gang DAG (`generate`, a g
 `aggregate`), which runs end to end through the backend:
 
 ```bash
-./demo/run.sh examples/backend_gang.py
+./demo/run.sh examples/gang_dag.py
 ```
 
 ## One-time prerequisites

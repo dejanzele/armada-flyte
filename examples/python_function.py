@@ -1,21 +1,26 @@
-"""A real Python @env.task that runs its body inside an Armada pod.
+"""A real Python @env.task whose body runs inside an Armada pod.
 
-Unlike the other examples (which run placeholder workloads), this runs actual Python: `square`
-executes in the Armada-scheduled pod, reading its input and writing its output through a shared
-blob store. The ergonomics are stock Flyte 2: set plugin_config on the TaskEnvironment and every
-@env.task in it routes to Armada.
+Runs actual Python: `square` executes in the Armada-scheduled pod, reading its input and writing
+its output through a shared blob store. The ergonomics are stock Flyte 2: set plugin_config on the
+TaskEnvironment and every @env.task in it routes to Armada.
 
-Requires (beyond an Armada cluster) a blob store reachable from BOTH this process and the Armada
-pods. This example points at a MinIO on the host (bound to 0.0.0.0:9100). It discovers the host's
-LAN IP at runtime, which is the one address both the host and the in-cluster pods can reach. Run:
+Two execution modes, selected by the same single block at the bottom:
 
-    ./.venv/bin/python examples/python_function.py
+  local (default)    `python examples/python_function.py`
+                     Runs the submit-and-poll loop in this process. Prints the result. Needs a
+                     blob store reachable from here and the pods (this discovers a host MinIO on
+                     :9100). Use examples/run_local.sh, which sets that up.
+
+  backend            `python examples/python_function.py --backend`  (or BACKEND=1)
+                     Registers the task with a Flyte backend (flyte.run), so it shows up in the
+                     Flyte UI. Use ./demo/run.sh, which wires the connector to the backend.
 """
 
 from __future__ import annotations
 
 import os
 import socket
+import sys
 
 
 def _host_ip() -> str:
@@ -27,22 +32,26 @@ def _host_ip() -> str:
     finally:
         s.close()
 
-# Set the blob config BEFORE importing armada_flyte, so the connector (created at import) picks it
-# up and injects it into the Armada pods.
+
+# Set the blob config BEFORE importing armada_flyte, so the local in-process connector picks it up.
+# (For --backend the connector runs as a separate service, wired by demo/run.sh; this is harmless.)
 os.environ.setdefault("FLYTE_BLOB_ENDPOINT", f"http://{_host_ip()}:9100")
 os.environ.setdefault("FLYTE_BLOB_ACCESS_KEY", "minio")
 os.environ.setdefault("FLYTE_BLOB_SECRET_KEY", "minio12345")
 
 import flyte
+import flyte.remote
 import flyte.storage
 
 from armada_flyte import ArmadaConfig
 
-image = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:latest")
+# A non-latest tag so the backend driver pod defaults to imagePullPolicy IfNotPresent and uses the
+# locally loaded image. The runners (examples/run_local.sh, demo/run.sh) build and load this tag.
+IMAGE = os.environ.get("ARMADA_TASK_IMAGE", "armada-flyte-task:v1")
 
 env = flyte.TaskEnvironment(
     name="ml",
-    image=image,
+    image=IMAGE,
     plugin_config=ArmadaConfig(queue="flyte", cpu="500m", memory="512Mi"),
 )
 
@@ -52,7 +61,7 @@ async def square(x: int) -> int:
     return x * x
 
 
-if __name__ == "__main__":
+def _run_local() -> None:
     flyte.init(
         storage=flyte.storage.S3(
             endpoint=os.environ["FLYTE_BLOB_ENDPOINT"],
@@ -65,5 +74,20 @@ if __name__ == "__main__":
     # raw_data_path must be remote (s3://) so the code bundle and inputs go to the blob store the
     # Armada pod reads from, not a local temp dir.
     run = flyte.with_runcontext(mode="local", raw_data_path="s3://flyte/raw").run(square, x=7)
-    print("\n=== result (square(7) computed inside an Armada pod) ===")
-    print(run.outputs())
+    print(f"\nsquare(7) = {run.outputs()[0]}  (real Python, computed in an Armada pod)")
+
+
+def _run_backend() -> None:
+    flyte.init(endpoint="localhost:30080", insecure=True, project="flytesnacks", domain="development")
+    run = flyte.run(square, x=7)
+    print(f"\nsubmitted run {run.name}\n  UI: {run.url}")
+    run.wait()
+    result = flyte.remote.Run.get(run.name).outputs()[0]
+    print(f"\nsquare(7) = {result}  (real Python, in an Armada pod, via the Flyte backend)")
+
+
+if __name__ == "__main__":
+    if "--backend" in sys.argv or os.environ.get("BACKEND"):
+        _run_backend()
+    else:
+        _run_local()

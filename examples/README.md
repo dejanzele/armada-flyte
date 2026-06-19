@@ -1,63 +1,56 @@
 # Examples
 
-Runnable Flyte 2 examples that schedule each task onto Armada via the `armada_flyte`
-connector. Every DAG node is a real Armada job: the connector submits it and polls it to
-completion. By default the node's output is synthesised from `ArmadaConfig.output_template` and
-inputs; `pipeline.py` shows real in-pod compute via `capture_result`.
+A learning ladder: each rung adds one concept. The first tier needs only an Armada cluster; the
+later tiers run real Python in the pods, which needs a blob store and a task image (the runner
+scripts set that up for you).
 
-## Prerequisites
+Prerequisite for all of them: a running Armada cluster (see
+[../docs/getting-started.md](../docs/getting-started.md)) and an editable install
+(`pip install -e ".[dev]"`).
 
-- A running Armada cluster reachable at `$ARMADA_URL` (default `localhost:50051`). See
-  [../docs/getting-started.md](../docs/getting-started.md) to stand one up locally.
-- An editable install of this package (`pip install -e ".[dev]"`), so `armada_flyte` and
-  `armada_client` resolve without setting `PYTHONPATH`.
+## Tier 1: shell workloads, no blob store
 
-Each example calls `ensure_queue()` on startup, so the Armada queue (default `flyte`,
-override with `$ARMADA_QUEUE`) is created automatically if it does not already exist.
+The lower-level `ArmadaTask`: every node is a real Armada job running a shell command. Nothing to
+set up beyond the cluster.
 
-## Examples
-
-| File                 | What it shows                                                                                                                                                                                  | Armada jobs |
-|----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
-| `single_task.py`     | The simplest case: ONE `ArmadaTask` run directly (no DAG).                                                                                                                                     | 1           |
-| `hello_world_dag.py` | A two-node DAG where `shout` depends on `hello` (linear data flow).                                                                                                                            | 2           |
-| `fanout_map.py`      | Fan-out / fan-in: N workers run concurrently via `asyncio.gather`, then one reduce node.                                                                                                       | N + 1       |
-| `gang_pipeline.py`   | `generate` then a 3-worker gang then `aggregate`. Generate's data is shared to every worker, the workers form an Armada gang (scheduled all-or-nothing), and aggregate combines their outputs. | 5           |
-| `pipeline.py`   | Same shape as `gang_pipeline.py`, but the pods do real work: a distributed sum of 1..N, sharded across the gang. Inputs are passed to each pod as env vars and the result is read back from the pod's stdout. Prints `sum(1..9) = 45`. | 5           |
-| `python_function.py` | A real Python `@env.task` (`square(x)`) whose body runs inside an Armada pod, with inputs/outputs through a blob store. Needs a MinIO reachable from the host and the cluster, and a task image loaded into the cluster (see the file header and docs/architecture.md). Prints `49`. | 1           |
-| `python_pipeline.py` | A real multi-stage map-reduce: `generate` then 4 parallel `shard_stats` then `merge`, each stage's actual Python running in an Armada pod with typed data (a `Stats` dataclass) flowing between them. Run it with one command via `run_python_pipeline.sh`. | 6           |
-| `gang_dag.py`        | The real-Python version of `gang_pipeline.py`: `generate` then a 3-worker GANG (`partial_sum`) then `total`. The three workers run actual Python and are scheduled as one Armada gang (shared `gang_id`, cardinality 3). Prints `total = 4789`. | 5           |
-| `backend_run.py`     | A real `@env.task` (`square`) run through a deployed Flyte backend (`flyte.run`), so it appears in the Flyte UI. Use `./demo/run.sh`, which wires it up. Prints `square(7) = 49`. | 1 |
-| `backend_gang.py`    | The gang DAG (`gang_dag.py`) run through the backend, so the whole thing shows in the Flyte UI. The driver runs in the backend cluster; the workers form an Armada gang. Use `./demo/run.sh examples/backend_gang.py`. Prints `total = 4789`. | 5 + driver |
-
-## Running
-
-After the editable install, no `PYTHONPATH` is needed:
+| File | What it adds | Armada jobs |
+| --- | --- | --- |
+| `single_task.py` | One `ArmadaTask`, no DAG. Output synthesised from `output_template`. | 1 |
+| `hello_world_dag.py` | A 2-node linear DAG (`shout` depends on `hello`). | 2 |
+| `fanout_map.py` | Fan-out / fan-in: N workers via `asyncio.gather`, then a reduce node (`FANOUT`, default 4). | N + 1 |
+| `pipeline.py` | Gang scheduling **and** real in-pod compute via `capture_result`: a distributed `sum(1..9) = 45`, the gang of 3 reading results from pod logs. | 5 |
 
 ```bash
 ./.venv/bin/python examples/single_task.py
 ./.venv/bin/python examples/hello_world_dag.py
-./.venv/bin/python examples/fanout_map.py
-```
-
-`fanout_map.py` honours `FANOUT` (default `4`) to set the number of concurrent worker jobs:
-
-```bash
 FANOUT=8 ./.venv/bin/python examples/fanout_map.py
-```
-
-`gang_pipeline.py` is the gang scheduling example, and `pipeline.py` is the same shape with real
-in-pod compute (a distributed sum):
-
-```bash
-./.venv/bin/python examples/gang_pipeline.py
 ./.venv/bin/python examples/pipeline.py
 ```
 
-The two real-Python examples (`python_function.py`, `python_pipeline.py`) run your actual function
-body in the pod, so they also need a blob store and a task image in the cluster. `run_python_pipeline.sh`
-sets all of that up and runs the map-reduce in one command:
+## Tier 2: real Python `@env.task`, local execution
+
+A stock `@env.task` whose actual Python body runs in the pod, with typed inputs and outputs flowing
+through a blob store. Requires a blob store reachable from the host and the pods, plus the task
+image in the cluster. `run_local.sh` sets all of that up and runs the example in one command:
+
+| File | What it adds | Armada jobs |
+| --- | --- | --- |
+| `python_function.py` | The first real Python body (`square`) in an Armada pod. | 1 |
+| `python_pipeline.py` | Typed data: a `@dataclass` flowing through a 4-way map-reduce. | 6 |
+| `gang_dag.py` | Gang scheduling on the real-Python surface (a gang of 3 `partial_sum`). | 5 |
 
 ```bash
-./examples/run_python_pipeline.sh
+./examples/run_local.sh examples/python_function.py   # square(7) = 49
+./examples/run_local.sh examples/python_pipeline.py   # the map-reduce
+./examples/run_local.sh examples/gang_dag.py          # total = 4789
+```
+
+## Tier 3: through a Flyte backend (in the Flyte UI)
+
+The same Tier 2 files take `--backend`, registering with FlyteAdmin via `flyte.run` so the run
+appears in the Flyte UI. `./demo/run.sh` does the backend wiring (see [../demo/](../demo/)):
+
+```bash
+./demo/run.sh                          # python_function.py --backend -> square(7) = 49, in the UI
+./demo/run.sh examples/gang_dag.py     # the gang DAG, in the UI -> total = 4789
 ```
