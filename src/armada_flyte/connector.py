@@ -94,13 +94,14 @@ def _quantity(value: str) -> api_resource.Quantity:
     return api_resource.Quantity(string=value)
 
 
-def _resources_from_template(container) -> Optional[core_v1.ResourceRequirements]:
-    """Map a rendered Flyte container's declared resources (from `@env.task(resources=...)`) to a
-    k8s ResourceRequirements, honouring cpu/memory/gpu/ephemeral-storage and request vs limit
-    separately. Returns None when the container declares none, so the caller can fall back."""
-    res = getattr(container, "resources", None)
-    if res is None:
-        return None
+def _resolve_resources(cfg: Dict[str, Any], container) -> core_v1.ResourceRequirements:
+    """Resolve the pod's resources, REQUIRING cpu and memory. Armada rejects a job with no
+    resources, so we fail fast with a clear error instead of guessing a default.
+
+    Precedence: an explicit ArmadaConfig cpu/memory overrides; otherwise the resources declared
+    via @env.task(resources=...) on the rendered container (cpu/memory/gpu/ephemeral-storage) are
+    used.
+    """
 
     def to_map(entries):
         out = {}
@@ -110,27 +111,11 @@ def _resources_from_template(container) -> Optional[core_v1.ResourceRequirements
                 out[key] = _quantity(e.value)
         return out
 
-    requests = to_map(res.requests)
-    limits = to_map(res.limits)
-    if not requests and not limits:
-        return None
-    # If the user gave only one side, mirror it (guaranteed QoS where possible).
-    return core_v1.ResourceRequirements(
-        requests=requests or dict(limits),
-        limits=limits or dict(requests),
-    )
-
-
-def _resolve_resources(cfg: Dict[str, Any], container=None) -> core_v1.ResourceRequirements:
-    """Resolve the pod's resources, REQUIRING cpu and memory. Armada rejects a job with no
-    resources, so we fail fast with a clear error instead of guessing a default.
-
-    Precedence: an explicit ArmadaConfig cpu/memory overrides; otherwise the resources declared
-    via @env.task(resources=...) on the rendered container are used.
-    """
-    native = _resources_from_template(container) if container is not None else None
-    requests = dict(native.requests) if native else {}
-    limits = dict(native.limits) if native else {}
+    native = getattr(container, "resources", None)
+    requests = to_map(native.requests) if native else {}
+    limits = to_map(native.limits) if native else {}
+    for k, v in limits.items():  # a limits-only declaration mirrors back into requests
+        requests.setdefault(k, v)
     for key, val in (("cpu", cfg.get("cpu")), ("memory", cfg.get("memory"))):
         if val:
             requests[key] = limits[key] = _quantity(val)
@@ -143,15 +128,6 @@ def _resolve_resources(cfg: Dict[str, Any], container=None) -> core_v1.ResourceR
     for k, v in requests.items():  # mirror requests into limits (guaranteed QoS)
         limits.setdefault(k, v)
     return core_v1.ResourceRequirements(requests=requests, limits=limits)
-
-
-def _pod_spec(container: core_v1.Container) -> core_v1.PodSpec:
-    # armada_client's k8s protos use camelCase field names.
-    return core_v1.PodSpec(
-        terminationGracePeriodSeconds=0,
-        restartPolicy="Never",
-        containers=[container],
-    )
 
 
 class ArmadaConnector(AsyncConnector):
@@ -253,7 +229,12 @@ class ArmadaConnector(AsyncConnector):
             imagePullPolicy="IfNotPresent",
             resources=_resolve_resources(cfg, c),
         )
-        return _pod_spec(container)
+        # armada_client's k8s protos use camelCase field names.
+        return core_v1.PodSpec(
+            terminationGracePeriodSeconds=0,
+            restartPolicy="Never",
+            containers=[container],
+        )
 
     async def create(
         self,
