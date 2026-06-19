@@ -19,24 +19,7 @@ Connector Name     Support Task Types
 Armada Connector   armada (0)
 ```
 
-Point it at Armada with `ARMADA_URL` (default `localhost:50051`) and `BINOCULARS_URL` (default
-`localhost:50053`).
-
-## Drive it like a backend would
-
-`deploy/call_service.py` calls `CreateTask` and polls `GetTask` over gRPC, exactly as a Flyte
-backend does. With an Armada cluster and the service both up:
-
-```bash
-./.venv/bin/python deploy/call_service.py
-```
-
-It submits a real Armada job through the service and prints the job's captured output, for example:
-
-```
-terminal: SUCCEEDED (armada job 01k... state=SUCCEEDED)
-  output result = 'hello-from-deployed-connector'
-```
+Point it at Armada with `ARMADA_URL` (default `localhost:50051`).
 
 ## Deploy it to a Flyte backend
 

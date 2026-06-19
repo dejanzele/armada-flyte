@@ -29,13 +29,7 @@ def test_mapping(state, phase):
 
 
 def _meta() -> ArmadaJobMetadata:
-    return ArmadaJobMetadata(
-        job_id="01job",
-        job_set_id="flyte-dag",
-        queue="flyte",
-        output_template="Hello, {name}! ({job_id})",
-        inputs={"name": "world"},
-    )
+    return ArmadaJobMetadata(job_id="01job", job_set_id="flyte-dag", queue="flyte")
 
 
 async def test_get_maps_state(connector, mock_client):
@@ -45,11 +39,13 @@ async def test_get_maps_state(connector, mock_client):
     assert resource.outputs is None
 
 
-async def test_get_renders_output_on_success(connector, mock_client):
+async def test_get_succeeded_does_not_synthesise_output(connector, mock_client):
+    # a0 writes the task's real typed output to the output location; the connector returns no
+    # synthesised output, so Flyte reads the real one from that location.
     mock_client.get_job_status.return_value.job_states = {"01job": submit_pb2.SUCCEEDED}
     resource = await connector.get(_meta())
     assert resource.phase == TaskExecution.SUCCEEDED
-    assert resource.outputs == {"result": "Hello, world! (01job)"}
+    assert resource.outputs is None
 
 
 async def test_get_unknown_when_job_absent(connector, mock_client):

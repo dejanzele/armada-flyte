@@ -1,30 +1,28 @@
-"""ArmadaConfig defaults and how ArmadaTask serialises them into the task template."""
+"""ArmadaConfig defaults and the keys it serialises (which the connector reads back)."""
 
 from __future__ import annotations
 
-from armada_flyte import ArmadaConfig, ArmadaTask
+from dataclasses import asdict
+
+from armada_flyte import ArmadaConfig
 
 
 def test_config_defaults():
     config = ArmadaConfig()
     assert config.queue == "flyte"
-    assert config.image == "busybox:latest"
-    assert config.command[0] == "sh"
+    assert config.job_set_id == "flyte-dag"
+    assert config.namespace == "default"
     assert config.priority == 1
+    # cpu/memory default to None: resources come from flyte.Resources unless explicitly overridden.
+    assert config.cpu is None and config.memory is None
 
 
-def test_custom_config_keys():
-    task = ArmadaTask(
-        name="t",
-        plugin_config=ArmadaConfig(queue="compute", priority=5),
-        inputs={"name": str},
-        outputs={"result": str},
-    )
-    # custom_config does not use the SerializationContext, so None is fine here.
-    custom = task.custom_config(None)
+def test_serialised_keys():
+    # asdict(ArmadaConfig) is exactly what ArmadaFunctionTask.custom_config emits and the connector
+    # reads back from the task template's custom.
+    custom = asdict(ArmadaConfig(queue="compute", priority=5))
     assert set(custom) == {
-        "queue", "job_set_id", "image", "command", "args",
-        "cpu", "memory", "namespace", "priority", "output_template", "capture_result",
+        "queue", "job_set_id", "namespace", "priority", "cpu", "memory",
         "gang_id", "gang_cardinality", "gang_node_uniformity_label",
     }
     assert custom["queue"] == "compute"
@@ -32,6 +30,6 @@ def test_custom_config_keys():
 
 
 def test_gang_defaults_off():
-    custom = ArmadaTask(name="t", plugin_config=ArmadaConfig()).custom_config(None)
-    assert custom["gang_id"] is None
-    assert custom["gang_cardinality"] == 0
+    cfg = ArmadaConfig()
+    assert cfg.gang_id is None
+    assert cfg.gang_cardinality == 0

@@ -9,17 +9,15 @@ The connector implements the three-method Flyte v2 connector contract:
 In local execution, ``flyte.connectors.AsyncConnectorExecutorMixin`` drives this loop
 in-process: it calls ``create`` once, then polls ``get`` every 3s until a terminal phase.
 
-Each DAG node runs a real Armada job. For a placeholder ``ArmadaTask`` the workload is a shell
-command (e.g. ``echo``) and the node's output is synthesised from the task's ``output_template``,
-or read from the pod logs when ``capture_result=True``. For a real ``@env.task`` function the
-connector wraps Flyte's rendered container (the ``a0`` entrypoint) into the pod, so the function
-body runs with its inputs and outputs flowing through the configured blob store.
+A task is a Flyte 2 ``@env.task`` function. Flyte renders it into a container (its ``a0``
+entrypoint); the connector wraps that container into an Armada job, so the function body runs in
+the pod with its inputs and outputs flowing through the configured blob store.
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import grpc
@@ -30,7 +28,6 @@ from armada_client.armada import submit_pb2
 from armada_client.client import ArmadaClient
 from armada_client.k8s.io.api.core.v1 import generated_pb2 as core_v1
 from armada_client.k8s.io.apimachinery.pkg.api.resource import generated_pb2 as api_resource
-from armada_client.log_client import JobLogClient
 from flyte import logger
 from flyte.connectors import AsyncConnector, ConnectorRegistry, Resource, ResourceMeta
 from flyteidl2.core import tasks_pb2 as flyte_tasks_pb2
@@ -44,10 +41,6 @@ _RESOURCE_NAME_TO_K8S = {
     flyte_tasks_pb2.Resources.GPU: "nvidia.com/gpu",
     flyte_tasks_pb2.Resources.EPHEMERAL_STORAGE: "ephemeral-storage",
 }
-
-# A task that wants its real output captured prints a line beginning with this marker. The
-# connector reads it back from the job's pod logs once the job succeeds.
-RESULT_MARKER = "ARMADA_RESULT:"
 
 # Armada JobState (pkg/api/submit.proto:97) -> Flyte TaskExecution.Phase.
 # PREEMPTED -> RETRYABLE_FAILED so Flyte retries jobs Armada preempted (expected, not a failure).
@@ -95,12 +88,6 @@ class ArmadaJobMetadata(ResourceMeta):
     job_id: str
     job_set_id: str
     queue: str
-    output_template: str = ""
-    inputs: Dict[str, Any] = field(default_factory=dict)
-    capture_result: bool = False
-    # True for real @env.task functions: a0 writes the real (typed) output to the output location,
-    # so get() must not synthesise one (which would overwrite it on the backend path).
-    is_function_task: bool = False
 
 
 def _quantity(value: str) -> api_resource.Quantity:
@@ -172,11 +159,10 @@ class ArmadaConnector(AsyncConnector):
     task_type_name = "armada"
     metadata_type = ArmadaJobMetadata
 
-    def __init__(self, armada_url: Optional[str] = None, binoculars_url: Optional[str] = None):
+    def __init__(self, armada_url: Optional[str] = None):
         self._url = armada_url or os.environ.get("ARMADA_URL", "localhost:50051")
-        self._binoculars_url = binoculars_url or os.environ.get("BINOCULARS_URL", "localhost:50053")
         # Storage config the Armada pods get (as FLYTE_AWS_*), pointing at the same store the Flyte
-        # client uploaded to. Empty endpoint means placeholder tasks only (no blob store needed).
+        # client uploaded to. Set by the operator (or the runner scripts) via FLYTE_BLOB_*.
         self._blob_endpoint = os.environ.get("FLYTE_BLOB_ENDPOINT", "")
         self._blob_key = os.environ.get("FLYTE_BLOB_ACCESS_KEY", "")
         self._blob_secret = os.environ.get("FLYTE_BLOB_SECRET_KEY", "")
@@ -188,20 +174,6 @@ class ArmadaConnector(AsyncConnector):
         if self._client is None:
             self._client = ArmadaClient(grpc.insecure_channel(self._url))
         return self._client
-
-    def _build_pod_spec(self, cfg: Dict[str, Any], inputs: Dict[str, Any]) -> core_v1.PodSpec:
-        # Expose each input to the workload as an upper-cased env var, so the pod can do real
-        # work on its inputs (e.g. input "dataset" becomes $DATASET).
-        env = [core_v1.EnvVar(name=k.upper(), value=str(v)) for k, v in inputs.items()]
-        container = core_v1.Container(
-            name=cfg.get("container_name", "armada-task"),
-            image=cfg.get("image", "busybox:latest"),
-            command=list(cfg.get("command", ["sh", "-c", "echo hello from armada"])),
-            args=list(cfg.get("args", [])),
-            env=env,
-            resources=_resolve_resources(cfg),
-        )
-        return _pod_spec(container)
 
     def _storage_env(self) -> list:
         """Stamp the platform storage config onto the pod using Flyte's own FLYTE_AWS_* convention,
@@ -283,19 +255,6 @@ class ArmadaConnector(AsyncConnector):
         )
         return _pod_spec(container)
 
-    def _result_from_logs(self, job_id: str) -> Optional[str]:
-        """Read the pod's stdout via binoculars and return the last RESULT_MARKER line's value."""
-        try:
-            lines = JobLogClient(self._binoculars_url, job_id, disable_ssl=True).logs()
-        except grpc.RpcError as e:
-            logger.warning(f"[armada] could not fetch logs for {job_id}: {e.code().name}")
-            return None
-        for line in reversed(lines):
-            text = getattr(line, "line", str(line))
-            if text.startswith(RESULT_MARKER):
-                return text[len(RESULT_MARKER):].strip()
-        return None
-
     async def create(
         self,
         task_template,
@@ -307,16 +266,14 @@ class ArmadaConnector(AsyncConnector):
         cfg = json_format.MessageToDict(task_template.custom) if task_template.custom else {}
         queue = cfg.get("queue", "flyte")
         job_set_id = cfg.get("job_set_id", "flyte-dag")
-        inputs = inputs or {}
 
         container = getattr(task_template, "container", None)
-        is_function_task = bool(container and container.image)
-        if is_function_task:
-            # Real function task: run Flyte's rendered container (the a0 entrypoint) in the pod.
-            pod = self._pod_from_flyte_container(container, cfg, output_prefix, task_execution_metadata)
-        else:
-            # Placeholder task (ArmadaTask): build the pod from ArmadaConfig.
-            pod = self._build_pod_spec(cfg, inputs)
+        if not (container and container.image):
+            raise ValueError(
+                "armada_flyte runs Flyte @env.task functions; this task has no rendered container."
+            )
+        # Run Flyte's rendered container (the a0 entrypoint) in the pod.
+        pod = self._pod_from_flyte_container(container, cfg, output_prefix, task_execution_metadata)
         # Scope the gang_id to this run so each run forms its own gang (and concurrent runs do not
         # collide), while every gang member in the run still shares the same id.
         run_name = self._run_name(task_execution_metadata)
@@ -337,39 +294,17 @@ class ArmadaConnector(AsyncConnector):
 
         gang = f" gang={annotations[_GANG_ID_ANNOTATION]}" if annotations else ""
         logger.info(f"[armada] submitted job {first.job_id} to queue={queue} job_set={job_set_id}{gang}")
-        return ArmadaJobMetadata(
-            job_id=first.job_id,
-            job_set_id=job_set_id,
-            queue=queue,
-            output_template=cfg.get("output_template", "armada job {job_id} succeeded"),
-            inputs={k: str(v) for k, v in inputs.items()},
-            capture_result=bool(cfg.get("capture_result", False)),
-            is_function_task=is_function_task,
-        )
+        return ArmadaJobMetadata(job_id=first.job_id, job_set_id=job_set_id, queue=queue)
 
     async def get(self, resource_meta: ArmadaJobMetadata, **kwargs) -> Resource:
         states = self.client.get_job_status([resource_meta.job_id]).job_states
         state = states.get(resource_meta.job_id, submit_pb2.UNKNOWN)
         phase = _ARMADA_STATE_TO_PHASE.get(state, TaskExecution.RUNNING)
-
-        outputs = None
-        if phase == TaskExecution.SUCCEEDED and not resource_meta.is_function_task:
-            # Placeholder task: if it asked for real output, read what the pod printed; otherwise
-            # (and as a fallback) synthesise the output from the template and inputs. Function tasks
-            # are skipped here: a0 already wrote their real typed output to the output location.
-            result = None
-            if resource_meta.capture_result:
-                result = self._result_from_logs(resource_meta.job_id)
-            if result is None:
-                result = resource_meta.output_template.format(
-                    job_id=resource_meta.job_id, **resource_meta.inputs
-                )
-            outputs = {"result": result}
-
+        # a0 writes the task's real typed output to the output location, so there is nothing for the
+        # connector to synthesise; Flyte reads the output from that location on success.
         return Resource(
             phase=phase,
             message=f"armada job {resource_meta.job_id} state={submit_pb2.JobState.Name(state)}",
-            outputs=outputs,
         )
 
     async def delete(self, resource_meta: ArmadaJobMetadata, **kwargs):

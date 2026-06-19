@@ -14,7 +14,7 @@ call:
 | `get`        | `Jobs.GetJobStatus` | Poll status, map the job state to a Flyte phase  |
 | `delete`     | `Submit.CancelJobs` | Cancel the job                                   |
 
-A task is routed to the connector by its `task_type`. `ArmadaTask` sets `task_type = "armada"`,
+A task is routed to the connector by its `task_type`. `ArmadaFunctionTask` (registered as the plugin for `ArmadaConfig`) sets `task_type = "armada"`,
 which matches `ArmadaConnector.task_type_name`. The task's `ArmadaConfig` is serialised into the
 task template's `custom` field, and the connector reads it back in `create` to build the job.
 
@@ -23,12 +23,12 @@ task template's `custom` field, and the connector reads it back in `create` to b
 In local execution, Flyte's `AsyncConnectorExecutorMixin` drives the loop in-process: it calls
 `create` once, then polls `get` every 3 seconds until the task reaches a terminal phase
 (`SUCCEEDED`, `FAILED`, or `ABORTED`). The connector itself holds no state between calls. The
-job handle it needs (`job_id`, `job_set_id`, `queue`, and the data to render the output) lives
+job handle it needs (`job_id`, `job_set_id`, `queue`) lives
 in `ArmadaJobMetadata`, which Flyte persists between `create` and `get`/`delete`.
 
 ```mermaid
 flowchart TD
-    dag["Flyte 2 DAG (ArmadaTask nodes)"]
+    dag["Flyte 2 DAG (@env.task nodes)"]
     mixin["AsyncConnectorExecutorMixin: create once, then poll get every 3s"]
     conn["ArmadaConnector (task_type 'armada')"]
     armada["Armada (localhost:50051)"]
@@ -64,19 +64,6 @@ task sets `gang_id` and a `gang_cardinality` of two or more, the connector attac
 annotations (`armadaproject.io/gangId`, `armadaproject.io/gangCardinality`) to the submission.
 Jobs sharing a gang are scheduled all-or-nothing together.
 
-## Output: synthesised, or read from the pod
-
-By default the connector does not run the user's Python inside the pod. Each node submits a real
-Armada job with a placeholder workload, and on success the connector synthesises the node's
-`result` by rendering `ArmadaConfig.output_template` against the job id and inputs. Data flowing
-between nodes is real Flyte 2 dataflow, but the per-node computation is symbolic.
-
-Setting `capture_result=True` makes the compute real. The connector passes each input into the
-pod as an upper-cased env var (input `numbers` becomes `$NUMBERS`), the workload computes a value
-and prints a line `ARMADA_RESULT:<value>`, and on success the connector reads that line back from
-the pod's logs (via binoculars) and returns it as the node's output. If no such line is found it
-falls back to the template.
-
 ## Real Python tasks
 
 A normal `@env.task` function can run its body inside an Armada pod. Register `ArmadaConfig` as a
@@ -91,10 +78,10 @@ async def square(x: int) -> int:
 ```
 
 How it works: Flyte renders the function into a container whose entrypoint is `a0` (it loads the
-code bundle, reads inputs from blob storage, runs the function, writes outputs back). For these
-tasks the connector ignores the placeholder fields and instead wraps that rendered container into
-the Armada pod, adding blob-store credentials so the pod can reach storage. The function executes
-in the pod and its return value flows back as the task output. See `examples/function.py`.
+code bundle, reads inputs from blob storage, runs the function, writes outputs back). The connector
+wraps that rendered container into the Armada pod, adding blob-store credentials so the pod can
+reach storage. The function executes in the pod and its return value flows back as the task output.
+See `examples/function.py`.
 
 This needs two things in place:
 
@@ -118,7 +105,7 @@ The connector runs in two ways with the same code:
 ## Limitations and next steps
 
 What works today: real Armada submission, status polling, gang scheduling, DAG dataflow, in-pod
-compute for shell workloads (via `capture_result`), real Python `@env.task` functions running in
+compute for real Python `@env.task` functions running in
 the pod (see above), and both execution modes above.
 
 One prerequisite is outside this repo:

@@ -33,10 +33,3 @@ Use a native arm64 interpreter, such as Homebrew's `python3.11`.
 `armada_client`'s Kubernetes protos keep the original field names, so it is `restartPolicy` and
 `terminationGracePeriodSeconds`, not the snake_case you might expect from generated Python
 protos.
-
-## Connector tasks and the driver cannot share an environment
-
-A connector task is built with `image=None`, while a function task (the driver) defaults to
-`image="auto"`. `TaskEnvironment.from_task` requires every task in an environment to share an
-image, so the two cannot live together. Put the `ArmadaTask` nodes in their own environment and
-give the driver environment a `depends_on` to it, as the examples do.

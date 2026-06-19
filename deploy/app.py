@@ -27,7 +27,6 @@ connector = flyte.app.ConnectorEnvironment(
     env_vars={
         # Point these at the Armada services reachable from the connector pod.
         "ARMADA_URL": "armada-server:50051",
-        "BINOCULARS_URL": "armada-binoculars:50053",
     },
 )
 
